@@ -192,6 +192,5 @@ async def giveaway(ctx, duration: int, *, prize: str):
         await ctx.send("No one entered the giveaway. 😢")
 
 import os
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
-
+print("Token:", os.getenv("DISCORD_BOT_TOKEN"))
 # pythonapi wicked_rp_bot.py # type: ignore
