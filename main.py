@@ -3,7 +3,11 @@ from discord.ext import commands  # type: ignore
 import asyncio
 import re
 import random
+import os
+import threading
+from flask import Flask
 
+# === DISCORD BOT SETUP ===
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -191,6 +195,18 @@ async def giveaway(ctx, duration: int, *, prize: str):
     else:
         await ctx.send("No one entered the giveaway. 😢")
 
-import os
-print("Token:", os.getenv("DISCORD_BOT_TOKEN"))
-# pythonapi wicked_rp_bot.py # type: ignore
+# === FLASK KEEP-ALIVE SERVER ===
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return "Bot is running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+
+# Start Flask server in a background thread
+threading.Thread(target=run_flask).start()
+
+# Run the bot
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
