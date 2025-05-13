@@ -7,8 +7,6 @@ import os
 import threading
 from flask import Flask
 
-require("./uptime.js");
-
 # === DISCORD BOT SETUP ===
 intents = discord.Intents.default()
 intents.members = True
