@@ -1,3 +1,13 @@
+# === IMPORTS ===
+import os
+import re
+import random
+import asyncio
+import threading
+from flask import Flask
+from discord.ext import commands
+import discord
+
 # === DISCORD BOT SETUP ===
 intents = discord.Intents.default()
 intents.members = True
@@ -21,7 +31,10 @@ MODERATION_ROLES = {
     "Director": ["all"],
 }
 
-PRIVILEGED_ROLES = [role for role, perms in MODERATION_ROLES.items() if perms == "all"]
+PRIVILEGED_ROLES = ["Admin", "Moderator"]  # Example privileged roles
+STREAMER_ROLE = "Streamer"
+STREAMER_CHANNEL_ID = 1207227502003757077
+ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
 
 def has_role_permission(ctx, command_name):
     for role in ctx.author.roles:
@@ -35,61 +48,6 @@ def has_role_permission(ctx, command_name):
 async def on_ready():
     print(f'Wicked RP Bot is online as {bot.user}!')
 
-import re
-
-import re
-
-PRIVILEGED_ROLES = ["Admin", "Moderator"]  # Example privileged roles
-STREAMER_ROLE = "Streamer"
-STREAMER_CHANNEL_ID = 1207227502003757077
-ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
-
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    link_pattern = re.compile(r"https?://[^\s]+")
-    links = link_pattern.findall(message.content)
-
-    if links:
-        has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
-        is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
-
-        for link in links:
-            # 🚫 Always block external Discord invites
-            if "discord.gg" in link or "discord.com/invite" in link:
-                invite_code = link.split("/invite/")[-1] if "/invite/" in link else link.split("discord.gg/")[-1]
-                try:
-                    invite = await bot.fetch_invite(invite_code)
-                    if invite.guild and invite.guild.id in [g.id for g in bot.guilds]:
-                        continue  # Allow server's own invite
-                except:
-                    pass
-                await message.delete()
-                await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
-                return
-
-            # ✅ Always allow GIF links
-            if any(domain in link for domain in ["tenor.com", "giphy.com"]):
-                continue
-
-            # ✅ Streamer-specific channel rule
-            if (
-                message.channel.id == STREAMER_CHANNEL_ID and
-                is_streamer and
-                any(domain in link for domain in ALLOWED_STREAMER_DOMAINS)
-            ):
-                continue  # Allow the link in the streamer channel
-
-            # ❌ If not privileged, and not an allowed streamer link, delete
-            if not has_privilege:
-                await message.delete()
-                await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
-                return
-
-    await bot.process_commands(message)
-
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -98,20 +56,19 @@ async def on_message(message):
     # === Racial slur filter ===
     slurs = ["spick", "nigger", "retarded"]  # Add more if needed
     content = message.content.lower()
-
     if any(slur in content for slur in slurs):
         await message.delete()
         try:
             await message.channel.send(f"🚫 {message.author.mention}, your message was removed for violating server rules.")
         except discord.Forbidden:
-            pass  # Bot can't send messages in the channel
+            pass
         try:
             await message.author.send("⚠️ You have been warned for using inappropriate language. Continued violations may lead to further actions.")
         except discord.Forbidden:
-            pass  # User DMs are closed
+            pass
         return
 
-    # === Existing link moderation ===
+    # === Link moderation ===
     link_pattern = re.compile(r"https?://[^\s]+")
     links = link_pattern.findall(message.content)
 
@@ -148,6 +105,8 @@ async def on_message(message):
                 return
 
     await bot.process_commands(message)
+
+# === MODERATION COMMANDS ===
 
 @bot.command()
 async def kick(ctx, user: discord.User):
@@ -290,5 +249,6 @@ def run_flask():
 # Start Flask server in a background thread
 threading.Thread(target=run_flask).start()
 
-# Run the bot
+# === RUN THE BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+
