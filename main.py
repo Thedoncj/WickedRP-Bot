@@ -40,6 +40,30 @@ def has_role_permission(ctx, command_name):
                     return True
     return False
 
+# List of slurs (case insensitive)
+SLURS = ["spick", "nigger", "retarded"]
+
+# Check for slurs
+lower_content = message.content.lower()
+if any(slur in lower_content for slur in SLURS):
+    await message.delete()
+    warning_msg = f"🚫 {message.author.mention}, your message was removed for violating community rules."
+    await message.channel.send(warning_msg)
+    
+    # Optional: send DM
+    try:
+        await message.author.send("⚠️ You have been warned for using prohibited language in the server. Continued behavior may lead to a ban.")
+    except discord.Forbidden:
+        pass  # User has DMs off
+
+    # Optional: log to a specific channel
+    log_channel_id = 123456789012345678  # replace with your log channel ID
+    log_channel = bot.get_channel(log_channel_id)
+    if log_channel:
+        await log_channel.send(f"🛑 User {message.author} used a slur and was warned in {message.channel.mention}.\nMessage: `{message.content}`")
+
+    return  # Stop processing further
+    
 @bot.event
 async def on_ready():
     print(f'Wicked RP Bot is online as {bot.user}!')
