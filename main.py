@@ -4,6 +4,7 @@ import re
 import random
 import asyncio
 import threading
+import aiohttp
 from flask import Flask
 from discord.ext import commands
 import discord
@@ -15,6 +16,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 global_ban_list = set()
+WEBHOOK_URL = "https://discord.com/api/webhooks/1372296254029041674/vQa8C6EMnGY4m2iOc6cYr5UmDv3pl3Uqx17vtCjhiFp3XlpbH38imSDThDkQLmv0jDL3"
 
 MODERATION_ROLES = {
     "Trial Moderator": ["kick", "mute", "voicemute"],
@@ -31,10 +33,7 @@ MODERATION_ROLES = {
     "Director": ["all"],
 }
 
-LINK_PRIVILEGED_ROLES = [
-    "Head Of Staff", "Trial Manager", "Management", "Head of Management", "Co Director", "Director"
-]
-
+PRIVILEGED_ROLES = ["Head Of Staff", "Trial Manager", "Management", "Head of Management", "Co Director", "Director"]
 STREAMER_ROLE = "Streamer"
 STREAMER_CHANNEL_ID = 1207227502003757077
 ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
@@ -47,6 +46,10 @@ def has_role_permission(ctx, command_name):
                     return True
     return False
 
+async def log_to_webhook(content):
+    async with aiohttp.ClientSession() as session:
+        await session.post(WEBHOOK_URL, json={"content": content})
+
 @bot.event
 async def on_ready():
     print(f'Wicked RP Bot is online as {bot.user}!')
@@ -57,10 +60,11 @@ async def on_message(message):
         return
 
     # === Racial slur filter ===
-    slurs = ["spick", "nigger", "retarded"]  # Add more if needed
+    slurs = ["spick", "nigger", "retarded"]
     content = message.content.lower()
     if any(slur in content for slur in slurs):
         await message.delete()
+        await log_to_webhook(f"🚫 Deleted slur message from {message.author} in #{message.channel}: `{message.content}`")
         try:
             await message.channel.send(f"🚫 {message.author.mention}, your message was removed for violating server rules.")
         except discord.Forbidden:
@@ -76,7 +80,7 @@ async def on_message(message):
     links = link_pattern.findall(message.content)
 
     if links:
-        has_privilege = any(role.name in LINK_PRIVILEGED_ROLES for role in message.author.roles)
+        has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
         is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
 
         for link in links:
@@ -90,6 +94,7 @@ async def on_message(message):
                     pass
                 await message.delete()
                 await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
+                await log_to_webhook(f"🚫 Deleted Discord invite from {message.author} in #{message.channel}: `{link}`")
                 return
 
             if any(domain in link for domain in ["tenor.com", "giphy.com"]):
@@ -105,9 +110,14 @@ async def on_message(message):
             if not has_privilege:
                 await message.delete()
                 await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
+                await log_to_webhook(f"🚫 Deleted unauthorized link from {message.author} in #{message.channel}: `{link}`")
                 return
 
     await bot.process_commands(message)
+
+@bot.event
+async def on_command(ctx):
+    await log_to_webhook(f"📝 `{ctx.command}` used by {ctx.author} in #{ctx.channel}")
 
 # === MODERATION COMMANDS ===
 
@@ -120,6 +130,7 @@ async def kick(ctx, user: discord.User):
     if member:
         await member.kick()
         await ctx.send(f"Kicked {member}")
+        await log_to_webhook(f"👢 {ctx.author} kicked {member}")
     else:
         await ctx.send("User not found in this server.")
 
@@ -130,56 +141,7 @@ async def ban(ctx, member: discord.Member, *, reason=None):
         return
     await member.ban(reason=reason)
     await ctx.send(f'🔨 {member} has been banned.')
-
-@bot.command()
-async def unban(ctx, *, user):
-    banned_users = [entry async for entry in ctx.guild.bans()]
-
-    if user.isdigit():
-        user_id = int(user)
-        for ban_entry in banned_users:
-            if ban_entry.user.id == user_id:
-                await ctx.guild.unban(ban_entry.user)
-                await ctx.send(f"✅ Unbanned {ban_entry.user}")
-                return
-        await ctx.send("❌ User ID not found in ban list.")
-        return
-
-    if '#' in user:
-        try:
-            name, discriminator = user.split('#')
-        except ValueError:
-            await ctx.send("❌ Invalid format. Use Username#1234 or user ID.")
-            return
-
-        for ban_entry in banned_users:
-            if ban_entry.user.name == name and ban_entry.user.discriminator == discriminator:
-                await ctx.guild.unban(ban_entry.user)
-                await ctx.send(f"✅ Unbanned {ban_entry.user}")
-                return
-
-        await ctx.send("❌ User not found in ban list.")
-    else:
-        await ctx.send("❌ Invalid format. Use Username#1234 or user ID.")
-
-@bot.command()
-async def mute(ctx, member: discord.Member):
-    if not has_role_permission(ctx, "mute"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
-    overwrite = discord.PermissionOverwrite()
-    overwrite.send_messages = False
-    for channel in ctx.guild.text_channels:
-        await channel.set_permissions(member, overwrite=overwrite)
-    await ctx.send(f'✉️ {member} has been text-muted.')
-
-@bot.command()
-async def voicemute(ctx, member: discord.Member):
-    if not has_role_permission(ctx, "voicemute"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
-    await member.edit(mute=True)
-    await ctx.send(f'🔇 {member} has been voice-muted.')
+    await log_to_webhook(f"🔨 {ctx.author} banned {member} | Reason: {reason or 'No reason provided'}")
 
 @bot.command()
 async def gban(ctx, user: discord.User, *, reason=None):
@@ -201,43 +163,7 @@ async def gban(ctx, user: discord.User, *, reason=None):
             except discord.Forbidden:
                 await ctx.send(f"❌ Failed to ban {user} in {guild.name} due to permissions.")
     await ctx.send(f'🌐 {user} has been globally banned from all servers.')
-
-@bot.command()
-async def ungban(ctx, user: discord.User):
-    if not has_role_permission(ctx, "ban"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
-    global global_ban_list
-    if user.id not in global_ban_list:
-        await ctx.send(f"❌ {user} is not in the global ban list.")
-        return
-    global_ban_list.remove(user.id)
-    await ctx.send(f'✅ {user} has been removed from the global ban list.')
-
-@bot.command()
-async def giverole(ctx, member: discord.Member, role: discord.Role):
-    await member.add_roles(role)
-    await ctx.send(f'🎖️ {member.mention} was given the role {role.name}')
-
-@bot.command()
-async def takerole(ctx, member: discord.Member, role: discord.Role):
-    await member.remove_roles(role)
-    await ctx.send(f'🧼 {role.name} was removed from {member.mention}')
-
-@bot.command()
-async def giveaway(ctx, duration: int, *, prize: str):
-    await ctx.send(f'🎉 **GIVEAWAY** 🎉\nPrize: **{prize}**\nReact with 🎉 to enter!\nTime: {duration} seconds')
-    message = await ctx.send("React below 👇")
-    await message.add_reaction("🎉")
-    await asyncio.sleep(duration)
-    message = await ctx.channel.fetch_message(message.id)
-    users = await message.reactions[0].users().flatten()
-    users = [u for u in users if not u.bot]
-    if users:
-        winner = random.choice(users)
-        await ctx.send(f'🎊 Congrats {winner.mention}, you won **{prize}**!')
-    else:
-        await ctx.send("No one entered the giveaway. 😢")
+    await log_to_webhook(f"🌐 {ctx.author} globally banned {user} | Reason: {reason or 'No reason provided'}")
 
 # === FLASK KEEP-ALIVE SERVER ===
 app = Flask(__name__)
@@ -249,8 +175,7 @@ def index():
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
 
-# Start Flask server in a background thread
 threading.Thread(target=run_flask).start()
 
-# === RUN THE BOT ===
+# === RUN BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
