@@ -26,8 +26,8 @@ MODERATION_ROLES = {
     "Trial Manager": ["all"],
     "Management": ["all"],
     "Head of Management": ["all"],
-    "Co Director": ["all"]
-    "Director": ["all"]
+    "Co Director": ["all"],
+    "Director": ["all"],
 }
 
 PRIVILEGED_ROLES = [role for role, perms in MODERATION_ROLES.items() if perms == "all"]
