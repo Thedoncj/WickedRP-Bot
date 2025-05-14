@@ -51,7 +51,7 @@ import re
 PRIVILEGED_ROLES = ["Admin", "Moderator"]  # Example privileged roles
 STREAMER_ROLE = "Streamer"
 STREAMER_CHANNEL_ID = 1207227502003757077
-ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com"]
+ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
 
 @bot.event
 async def on_message(message):
