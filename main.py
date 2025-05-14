@@ -31,14 +31,8 @@ MODERATION_ROLES = {
     "Director": ["all"],
 }
 
-# Updated privileged roles
-PRIVILEGED_ROLES = [
-    "Head Of Staff",
-    "Trial Manager",
-    "Management",
-    "Head of Management",
-    "Co Director",
-    "Director"
+LINK_PRIVILEGED_ROLES = [
+    "Head Of Staff", "Trial Manager", "Management", "Head of Management", "Co Director", "Director"
 ]
 
 STREAMER_ROLE = "Streamer"
@@ -82,7 +76,7 @@ async def on_message(message):
     links = link_pattern.findall(message.content)
 
     if links:
-        has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
+        has_privilege = any(role.name in LINK_PRIVILEGED_ROLES for role in message.author.roles)
         is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
 
         for link in links:
@@ -233,4 +227,30 @@ async def takerole(ctx, member: discord.Member, role: discord.Role):
 @bot.command()
 async def giveaway(ctx, duration: int, *, prize: str):
     await ctx.send(f'🎉 **GIVEAWAY** 🎉\nPrize: **{prize}**\nReact with 🎉 to enter!\nTime: {duration} seconds')
-    message = await ctx.send("React below 👇
+    message = await ctx.send("React below 👇")
+    await message.add_reaction("🎉")
+    await asyncio.sleep(duration)
+    message = await ctx.channel.fetch_message(message.id)
+    users = await message.reactions[0].users().flatten()
+    users = [u for u in users if not u.bot]
+    if users:
+        winner = random.choice(users)
+        await ctx.send(f'🎊 Congrats {winner.mention}, you won **{prize}**!')
+    else:
+        await ctx.send("No one entered the giveaway. 😢")
+
+# === FLASK KEEP-ALIVE SERVER ===
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return "Bot is running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+
+# Start Flask server in a background thread
+threading.Thread(target=run_flask).start()
+
+# === RUN THE BOT ===
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
