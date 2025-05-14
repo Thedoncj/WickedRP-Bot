@@ -120,7 +120,7 @@ async def on_message(message):
 async def log_command(ctx):
     log_to_webhook(f"📌 Command used: `{ctx.command}` by {ctx.author} in #{ctx.channel}")
 
-# === MODERATION COMMANDS ===
+# === MODERATION COMMANDS WITH LOGGING ===
 
 @bot.command()
 async def kick(ctx, user: discord.User):
@@ -153,6 +153,7 @@ async def unban(ctx, *, user):
             if ban_entry.user.id == user_id:
                 await ctx.guild.unban(ban_entry.user)
                 await ctx.send(f"✅ Unbanned {ban_entry.user}")
+                log_to_webhook(f"♻️ {ctx.author} unbanned {ban_entry.user} in {ctx.guild.name}")
                 return
         await ctx.send("❌ User ID not found in ban list.")
         return
@@ -166,6 +167,7 @@ async def unban(ctx, *, user):
             if ban_entry.user.name == name and ban_entry.user.discriminator == discriminator:
                 await ctx.guild.unban(ban_entry.user)
                 await ctx.send(f"✅ Unbanned {ban_entry.user}")
+                log_to_webhook(f"♻️ {ctx.author} unbanned {ban_entry.user} in {ctx.guild.name}")
                 return
         await ctx.send("❌ User not found in ban list.")
     else:
@@ -181,6 +183,7 @@ async def mute(ctx, member: discord.Member):
     for channel in ctx.guild.text_channels:
         await channel.set_permissions(member, overwrite=overwrite)
     await ctx.send(f'✉️ {member} has been text-muted.')
+    log_to_webhook(f"🔇 {ctx.author} muted {member} in text channels on {ctx.guild.name}")
 
 @bot.command()
 async def voicemute(ctx, member: discord.Member):
@@ -189,6 +192,7 @@ async def voicemute(ctx, member: discord.Member):
         return
     await member.edit(mute=True)
     await ctx.send(f'🔇 {member} has been voice-muted.')
+    log_to_webhook(f"🔈 {ctx.author} voice-muted {member} in {ctx.guild.name}")
 
 @bot.command()
 async def gban(ctx, user: discord.User, *, reason=None):
@@ -221,16 +225,19 @@ async def ungban(ctx, user: discord.User):
         return
     global_ban_list.remove(user.id)
     await ctx.send(f'✅ {user} has been removed from the global ban list.')
+    log_to_webhook(f"🌍 {ctx.author} removed {user} from global ban list")
 
 @bot.command()
 async def giverole(ctx, member: discord.Member, role: discord.Role):
     await member.add_roles(role)
     await ctx.send(f'🎖️ {member.mention} was given the role {role.name}')
+    log_to_webhook(f"🎖️ {ctx.author} gave role {role.name} to {member} in {ctx.guild.name}")
 
 @bot.command()
 async def takerole(ctx, member: discord.Member, role: discord.Role):
     await member.remove_roles(role)
     await ctx.send(f'🧼 {role.name} was removed from {member.mention}')
+    log_to_webhook(f"🧼 {ctx.author} removed role {role.name} from {member} in {ctx.guild.name}")
 
 @bot.command()
 async def giveaway(ctx, duration: int, *, prize: str):
@@ -244,8 +251,10 @@ async def giveaway(ctx, duration: int, *, prize: str):
     if users:
         winner = random.choice(users)
         await ctx.send(f'🎊 Congrats {winner.mention}, you won **{prize}**!')
+        log_to_webhook(f"🎁 {ctx.author} hosted a giveaway. Winner: {winner}. Prize: {prize}")
     else:
         await ctx.send("No one entered the giveaway. 😢")
+        log_to_webhook(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
 
 # === FLASK KEEP-ALIVE SERVER ===
 app = Flask(__name__)
@@ -262,3 +271,4 @@ threading.Thread(target=run_flask).start()
 
 # === RUN THE BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+
