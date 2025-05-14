@@ -46,10 +46,12 @@ async def on_ready():
 
 import re
 
-# Define your list of privileged roles
-PRIVILEGED_ROLES = ["Admin", "Moderator"]  # Example
+import re
+
+PRIVILEGED_ROLES = ["Admin", "Moderator"]  # Example privileged roles
 STREAMER_ROLE = "Streamer"
-ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok.com"]
+STREAMER_CHANNEL_ID = 1207227502003757077
+ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com"]
 
 @bot.event
 async def on_message(message):
@@ -64,27 +66,33 @@ async def on_message(message):
         is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
 
         for link in links:
-            # Allow internal server invites
+            # 🚫 Always block external Discord invites
             if "discord.gg" in link or "discord.com/invite" in link:
                 invite_code = link.split("/invite/")[-1] if "/invite/" in link else link.split("discord.gg/")[-1]
                 try:
                     invite = await bot.fetch_invite(invite_code)
                     if invite.guild and invite.guild.id in [g.id for g in bot.guilds]:
-                        continue
+                        continue  # Allow server's own invite
                 except:
                     pass
+                await message.delete()
+                await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
+                return
 
-            # Check for gif links
+            # ✅ Always allow GIF links
             if any(domain in link for domain in ["tenor.com", "giphy.com"]):
                 continue
 
-            # If not privileged
-            if not has_privilege:
-                # If user is a streamer, check allowed streaming links
-                if is_streamer and any(domain in link for domain in ALLOWED_STREAMER_DOMAINS):
-                    continue  # Allow the link
+            # ✅ Streamer-specific channel rule
+            if (
+                message.channel.id == STREAMER_CHANNEL_ID and
+                is_streamer and
+                any(domain in link for domain in ALLOWED_STREAMER_DOMAINS)
+            ):
+                continue  # Allow the link in the streamer channel
 
-                # Otherwise, block and delete
+            # ❌ If not privileged, and not an allowed streamer link, delete
+            if not has_privilege:
                 await message.delete()
                 await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
                 return
