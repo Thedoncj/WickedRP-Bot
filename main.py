@@ -226,16 +226,40 @@ async def ungban(ctx, user: discord.User):
     await log_to_channel(f"🌍 {ctx.author} removed {user} from global ban list")
 
 @bot.command()
-async def giverole(ctx, member: discord.Member, role: discord.Role):
-    await member.add_roles(role)
-    await styled_reply(ctx, f'🎖️ Gave `{role.name}` to {member.mention}')
-    await log_to_channel(f"🎖️ {ctx.author} gave role {role.name} to {member} in {ctx.guild.name}")
+async def giverole(ctx, member: discord.Member, role_id: int):
+    if not has_role_permission(ctx, "giverole"):
+        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
+
+    role = ctx.guild.get_role(role_id)
+    if not role:
+        return await styled_reply(ctx, "❌ Invalid role ID provided.", discord.Color.red())
+
+    try:
+        await member.add_roles(role, reason=f"Given by {ctx.author}")
+        await styled_reply(ctx, f'🎖️ Gave `{role.name}` to {member.mention}')
+        await log_to_channel(f"🎖️ {ctx.author} gave role `{role.name}` (ID: {role.id}) to {member.mention} in {ctx.guild.name}")
+    except discord.Forbidden:
+        await styled_reply(ctx, "❌ I do not have permission to give that role.", discord.Color.red())
+    except Exception as e:
+        await styled_reply(ctx, f"⚠️ Error: {str(e)}", discord.Color.red())
 
 @bot.command()
-async def takerole(ctx, member: discord.Member, role: discord.Role):
-    await member.remove_roles(role)
-    await styled_reply(ctx, f'🧼 Removed `{role.name}` from {member.mention}')
-    await log_to_channel(f"🧼 {ctx.author} removed role {role.name} from {member} in {ctx.guild.name}")
+async def takerole(ctx, member: discord.Member, role_id: int):
+    if not has_role_permission(ctx, "giverole"):
+        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
+
+    role = ctx.guild.get_role(role_id)
+    if not role:
+        return await styled_reply(ctx, "❌ Invalid role ID provided.", discord.Color.red())
+
+    try:
+        await member.remove_roles(role, reason=f"Removed by {ctx.author}")
+        await styled_reply(ctx, f'🧼 Removed `{role.name}` from {member.mention}')
+        await log_to_channel(f"🧼 {ctx.author} removed role `{role.name}` (ID: {role.id}) from {member.mention} in {ctx.guild.name}")
+    except discord.Forbidden:
+        await styled_reply(ctx, "❌ I do not have permission to remove that role.", discord.Color.red())
+    except Exception as e:
+        await styled_reply(ctx, f"⚠️ Error: {str(e)}", discord.Color.red())
 
 @bot.command()
 async def giveaway(ctx, duration: int, *, prize: str):
