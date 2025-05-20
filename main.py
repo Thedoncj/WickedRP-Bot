@@ -37,14 +37,13 @@ LINK_PRIVILEGED_ROLES = [
 ]
 STREAMER_ROLE = "Streamer"
 STREAMER_CHANNEL_ID = 1207227502003757077
-ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
-WEBHOOK_URL = "https://discord.com/api/webhooks/1372296254029041674/vQa8C6EMnGY4m2iOc6cYr5UmDv3pl3Uqx17vtCjhiFp3XlpbH38imSDThDkQLmv0jDL3"
+LOG_CHANNEL_ID = 1372296224803258480
 
-def log_to_webhook(content):
-    try:
-        requests.post(WEBHOOK_URL, json={"content": content})
-    except Exception as e:
-        print(f"Failed to send webhook log: {e}")
+# === Logging to a Discord channel instead of a webhook ===
+async def log_to_channel(content):
+    channel = bot.get_channel(LOG_CHANNEL_ID)
+    if channel:
+        await channel.send(content)
 
 def has_role_permission(ctx, command_name):
     for role in ctx.author.roles:
@@ -68,7 +67,7 @@ async def on_message(message):
     content = message.content.lower()
     if any(slur in content for slur in slurs):
         await message.delete()
-        log_to_webhook(f"🚫 Message from {message.author} deleted for slur usage in #{message.channel}: {message.content}")
+        await log_to_channel(f"🚫 Message from {message.author} deleted for slur usage in #{message.channel}: {message.content}")
         try:
             await message.channel.send(f"🚫 {message.author.mention}, your message was removed for violating server rules.")
             await message.author.send("⚠️ You have been warned for using inappropriate language.")
@@ -94,7 +93,7 @@ async def on_message(message):
                 except:
                     pass
                 await message.delete()
-                log_to_webhook(f"🚫 Invite link deleted from {message.author} in #{message.channel}: {message.content}")
+                await log_to_channel(f"🚫 Invite link deleted from {message.author} in #{message.channel}: {message.content}")
                 await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
                 return
 
@@ -104,13 +103,13 @@ async def on_message(message):
             if (
                 message.channel.id == STREAMER_CHANNEL_ID and
                 is_streamer and
-                any(domain in link for domain in ALLOWED_STREAMER_DOMAINS)
+                any(domain in link for domain in ["twitch.tv", "youtube.com", "kick.com", "tiktok"])
             ):
                 continue
 
             if not has_privilege:
                 await message.delete()
-                log_to_webhook(f"🚫 Link deleted from {message.author} in #{message.channel}: {message.content}")
+                await log_to_channel(f"🚫 Link deleted from {message.author} in #{message.channel}: {message.content}")
                 await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
                 return
 
@@ -118,31 +117,40 @@ async def on_message(message):
 
 @bot.listen("on_command")
 async def log_command(ctx):
-    log_to_webhook(f"📌 Command used: `{ctx.command}` by {ctx.author} in #{ctx.channel}")
+    await log_to_channel(f"📌 Command used: `{ctx.command}` by {ctx.author} in #{ctx.channel}")
 
-# === MODERATION COMMANDS WITH LOGGING ===
+# === Command Wrapper to delete original command and send styled embeds ===
+async def styled_reply(ctx, message: str, color=discord.Color.blurple()):
+    embed = discord.Embed(description=message, color=color)
+    await ctx.send(embed=embed)
+    try:
+        await ctx.message.delete()
+    except discord.NotFound:
+        pass
+
+# === MODERATION COMMANDS ===
 
 @bot.command()
 async def kick(ctx, user: discord.User):
     if not has_role_permission(ctx, "kick"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
+        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
+
     member = ctx.guild.get_member(user.id)
     if member:
         await member.kick()
-        await ctx.send(f"Kicked {member}")
-        log_to_webhook(f"👢 {ctx.author} kicked {member} in {ctx.guild.name}")
+        await styled_reply(ctx, f"👢 {member} has been kicked.")
+        await log_to_channel(f"👢 {ctx.author} kicked {member} in {ctx.guild.name}")
     else:
-        await ctx.send("User not found in this server.")
+        await styled_reply(ctx, "❌ User not found in this server.", discord.Color.red())
 
 @bot.command()
 async def ban(ctx, member: discord.Member, *, reason=None):
     if not has_role_permission(ctx, "ban"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
+        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
+
     await member.ban(reason=reason)
-    await ctx.send(f'🔨 {member} has been banned.')
-    log_to_webhook(f"🔨 {ctx.author} banned {member} in {ctx.guild.name}. Reason: {reason}")
+    await styled_reply(ctx, f'🔨 {member} has been banned.')
+    await log_to_channel(f"🔨 {ctx.author} banned {member} in {ctx.guild.name}. Reason: {reason}")
 
 @bot.command()
 async def unban(ctx, *, user):
@@ -152,57 +160,49 @@ async def unban(ctx, *, user):
         for ban_entry in banned_users:
             if ban_entry.user.id == user_id:
                 await ctx.guild.unban(ban_entry.user)
-                await ctx.send(f"✅ Unbanned {ban_entry.user}")
-                log_to_webhook(f"♻️ {ctx.author} unbanned {ban_entry.user} in {ctx.guild.name}")
+                await styled_reply(ctx, f"✅ Unbanned {ban_entry.user}")
+                await log_to_channel(f"♻️ {ctx.author} unbanned {ban_entry.user} in {ctx.guild.name}")
                 return
-        await ctx.send("❌ User ID not found in ban list.")
-        return
+        return await styled_reply(ctx, "❌ User ID not found in ban list.", discord.Color.red())
     if '#' in user:
         try:
             name, discriminator = user.split('#')
         except ValueError:
-            await ctx.send("❌ Invalid format. Use Username#1234 or user ID.")
-            return
+            return await styled_reply(ctx, "❌ Invalid format. Use Username#1234 or user ID.", discord.Color.red())
         for ban_entry in banned_users:
             if ban_entry.user.name == name and ban_entry.user.discriminator == discriminator:
                 await ctx.guild.unban(ban_entry.user)
-                await ctx.send(f"✅ Unbanned {ban_entry.user}")
-                log_to_webhook(f"♻️ {ctx.author} unbanned {ban_entry.user} in {ctx.guild.name}")
+                await styled_reply(ctx, f"✅ Unbanned {ban_entry.user}")
+                await log_to_channel(f"♻️ {ctx.author} unbanned {ban_entry.user} in {ctx.guild.name}")
                 return
-        await ctx.send("❌ User not found in ban list.")
-    else:
-        await ctx.send("❌ Invalid format. Use Username#1234 or user ID.")
+        return await styled_reply(ctx, "❌ User not found in ban list.", discord.Color.red())
+    return await styled_reply(ctx, "❌ Invalid format. Use Username#1234 or user ID.", discord.Color.red())
 
 @bot.command()
 async def mute(ctx, member: discord.Member):
     if not has_role_permission(ctx, "mute"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
-    overwrite = discord.PermissionOverwrite()
-    overwrite.send_messages = False
+        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
+    overwrite = discord.PermissionOverwrite(send_messages=False)
     for channel in ctx.guild.text_channels:
         await channel.set_permissions(member, overwrite=overwrite)
-    await ctx.send(f'✉️ {member} has been text-muted.')
-    log_to_webhook(f"🔇 {ctx.author} muted {member} in text channels on {ctx.guild.name}")
+    await styled_reply(ctx, f'🔇 {member} has been muted in text channels.')
+    await log_to_channel(f"🔇 {ctx.author} muted {member} in text channels on {ctx.guild.name}")
 
 @bot.command()
 async def voicemute(ctx, member: discord.Member):
     if not has_role_permission(ctx, "voicemute"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
+        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
     await member.edit(mute=True)
-    await ctx.send(f'🔇 {member} has been voice-muted.')
-    log_to_webhook(f"🔈 {ctx.author} voice-muted {member} in {ctx.guild.name}")
+    await styled_reply(ctx, f'🔇 {member} has been voice-muted.')
+    await log_to_channel(f"🔈 {ctx.author} voice-muted {member} in {ctx.guild.name}")
 
 @bot.command()
 async def gban(ctx, user: discord.User, *, reason=None):
     if not has_role_permission(ctx, "ban"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
+        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
     global global_ban_list
     if user.id in global_ban_list:
-        await ctx.send(f"⚠️ {user} is already globally banned.")
-        return
+        return await styled_reply(ctx, f"⚠️ {user} is already globally banned.")
     global_ban_list.add(user.id)
     for guild in bot.guilds:
         member = guild.get_member(user.id)
@@ -210,38 +210,36 @@ async def gban(ctx, user: discord.User, *, reason=None):
             try:
                 await guild.ban(member, reason=f"Global Ban: {reason}")
             except discord.Forbidden:
-                await ctx.send(f"❌ Failed to ban {user} in {guild.name} due to permissions.")
-    await ctx.send(f'🌐 {user} has been globally banned from all servers.')
-    log_to_webhook(f"🌐 {ctx.author} globally banned {user}. Reason: {reason}")
+                await styled_reply(ctx, f"❌ Failed to ban {user} in {guild.name} due to permissions.")
+    await styled_reply(ctx, f'🌐 {user} has been globally banned from all servers.')
+    await log_to_channel(f"🌐 {ctx.author} globally banned {user}. Reason: {reason}")
 
 @bot.command()
 async def ungban(ctx, user: discord.User):
     if not has_role_permission(ctx, "ban"):
-        await ctx.send("❌ You do not have permission to use this command.")
-        return
+        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
     global global_ban_list
     if user.id not in global_ban_list:
-        await ctx.send(f"❌ {user} is not in the global ban list.")
-        return
+        return await styled_reply(ctx, f"❌ {user} is not in the global ban list.")
     global_ban_list.remove(user.id)
-    await ctx.send(f'✅ {user} has been removed from the global ban list.')
-    log_to_webhook(f"🌍 {ctx.author} removed {user} from global ban list")
+    await styled_reply(ctx, f'✅ {user} has been removed from the global ban list.')
+    await log_to_channel(f"🌍 {ctx.author} removed {user} from global ban list")
 
 @bot.command()
 async def giverole(ctx, member: discord.Member, role: discord.Role):
     await member.add_roles(role)
-    await ctx.send(f'🎖️ {member.mention} was given the role {role.name}')
-    log_to_webhook(f"🎖️ {ctx.author} gave role {role.name} to {member} in {ctx.guild.name}")
+    await styled_reply(ctx, f'🎖️ Gave `{role.name}` to {member.mention}')
+    await log_to_channel(f"🎖️ {ctx.author} gave role {role.name} to {member} in {ctx.guild.name}")
 
 @bot.command()
 async def takerole(ctx, member: discord.Member, role: discord.Role):
     await member.remove_roles(role)
-    await ctx.send(f'🧼 {role.name} was removed from {member.mention}')
-    log_to_webhook(f"🧼 {ctx.author} removed role {role.name} from {member} in {ctx.guild.name}")
+    await styled_reply(ctx, f'🧼 Removed `{role.name}` from {member.mention}')
+    await log_to_channel(f"🧼 {ctx.author} removed role {role.name} from {member} in {ctx.guild.name}")
 
 @bot.command()
 async def giveaway(ctx, duration: int, *, prize: str):
-    await ctx.send(f'🎉 **GIVEAWAY** 🎉\nPrize: **{prize}**\nReact with 🎉 to enter!\nTime: {duration} seconds')
+    await styled_reply(ctx, f'🎉 **GIVEAWAY** 🎉\nPrize: **{prize}**\nReact with 🎉 to enter!\nTime: {duration} seconds')
     message = await ctx.send("React below 👇")
     await message.add_reaction("🎉")
     await asyncio.sleep(duration)
@@ -250,11 +248,11 @@ async def giveaway(ctx, duration: int, *, prize: str):
     users = [u for u in users if not u.bot]
     if users:
         winner = random.choice(users)
-        await ctx.send(f'🎊 Congrats {winner.mention}, you won **{prize}**!')
-        log_to_webhook(f"🎁 {ctx.author} hosted a giveaway. Winner: {winner}. Prize: {prize}")
+        await styled_reply(ctx, f'🎊 Congrats {winner.mention}, you won **{prize}**!')
+        await log_to_channel(f"🎁 {ctx.author} hosted a giveaway. Winner: {winner}. Prize: {prize}")
     else:
-        await ctx.send("No one entered the giveaway. 😢")
-        log_to_webhook(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
+        await styled_reply(ctx, "No one entered the giveaway. 😢")
+        await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
 
 # === FLASK KEEP-ALIVE SERVER ===
 app = Flask(__name__)
@@ -266,9 +264,6 @@ def index():
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
 
-# Start Flask server in a background thread
 threading.Thread(target=run_flask).start()
 
-# === RUN THE BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
-
