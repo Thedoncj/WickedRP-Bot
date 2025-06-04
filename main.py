@@ -1,4 +1,3 @@
-# === IMPORTS ===
 import os
 import re
 import random
@@ -22,9 +21,9 @@ MODERATION_ROLES = {
     "Moderator": ["kick", "mute", "voicemute"],
     "Head Moderator": ["kick", "mute", "voicemute"],
     "Trial Administrator": ["kick", "mute", "voicemute"],
-    "Administrator": ["kick", "ban", "unban", "mute", "voicemute"],
-    "Head Administrator": ["kick", "ban", "unban", "mute", "gban"],
-    "Head Of Staff": ["all"],
+    "Administrator": ["kick", "ban", "unban", "mute", "voicemute", "giverole"],
+    "Head Administrator": ["kick", "ban", "unban", "mute", "gban", "voicemute", "giverole"],
+    "Head Of Staff": ["kick", "ban", "unban", "mute", "gban", "voicemute", "giverole", "all"],
     "Trial Manager": ["all"],
     "Management": ["all"],
     "Head of Management": ["all"],
@@ -47,10 +46,10 @@ async def log_to_channel(content):
 
 def has_role_permission(ctx, command_name):
     for role in ctx.author.roles:
-        for role_name, perms in MODERATION_ROLES.items():
-            if role.name.lower() == role_name.lower():
-                if perms == "all" or (perms and command_name in perms):
-                    return True
+        perms = MODERATION_ROLES.get(role.name)
+        if perms:
+            if "all" in perms or command_name in perms:
+                return True
     return False
 
 @bot.event
