@@ -26,7 +26,7 @@ MODERATION_ROLES = {
     "Head Of Staff": ["kick", "ban", "unban", "mute", "gban", "voicemute", "giverole", "all"],
     "Trial Manager": ["all"],
     "Management": ["all"],
-    "Head of Management": ["all"],
+    "Head Of Management": ["all"],
     "Co Director": ["all"],
     "Director": ["all"],
 }
