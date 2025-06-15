@@ -20,7 +20,7 @@ MODERATION_ROLES = {
     "Trial Moderator": ["kick", "mute", "voicemute"],
     "Moderator": ["kick", "mute", "voicemute"],
     "Head Moderator": ["kick", "mute", "voicemute"],
-    "Trial Administrator": ["kick", "mute", "voicemute"],
+    "Trial Administrator": ["kick", "mute", "voicemute", "giverole"],
     "Administrator": ["kick", "ban", "unban", "mute", "voicemute", "giverole"],
     "Head Administrator": ["kick", "ban", "unban", "mute", "gban", "voicemute", "giverole"],
     "Head Of Staff": ["kick", "ban", "unban", "mute", "gban", "voicemute", "giverole", "all"],
