@@ -402,10 +402,6 @@ async def giveaway(ctx, duration: int, *, prize: str):
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
 
-# === Run the bot ===
-if __name__ == "__main__":
-    # Setup signal handlers for graceful shutdown
-    start_signal_handlers()
-    # Run the bot
-    TOKEN = "YOUR_BOT_TOKEN_HERE"  # Replace with your bot token
-    bot.run(TOKEN)
+# --- Run the bot ---
+
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
