@@ -42,6 +42,12 @@ STREAMER_CHANNEL_ID = 1207227502003757077
 LOG_CHANNEL_ID = 1384882351678689431     # Replace with your log channel ID
 STREAMER_ROLE = "Streamer"
 
+import json  # Needed for mod_history file operations
+kick_list = set(Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
+ban_list = set(Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
+warn_list = set(Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
+gban_list = set(Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
+
 # Example: Prior moderation history
 mod_history = {
     123456789012345678: [  # User ID
@@ -428,10 +434,25 @@ async def voicemute(ctx, member: discord.Member):
 async def gban(ctx, user: discord.User, *, reason=None):
     if not has_role_permission(ctx, "ban"):
         return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
+
     global gban_list
     if user.id in gban_list:
         return await styled_reply(ctx, f"⚠️ {user} is already globally banned.")
     gban_list.add(user.id)
+
+    # Log to history
+    user_id_str = str(user.id)
+    if user_id_str not in mod_history:
+        mod_history[user_id_str] = []
+    mod_history[user_id_str].append({
+        "type": "gban",
+        "guild_id": "global",
+        "moderator": ctx.author.name,
+        "reason": reason or "No reason provided"
+    })
+    save_mod_history()
+
+    # Ban from all guilds
     for guild in bot.guilds:
         member = guild.get_member(user.id)
         if member:
@@ -439,8 +460,10 @@ async def gban(ctx, user: discord.User, *, reason=None):
                 await guild.ban(member, reason=f"Global Ban: {reason}")
             except discord.Forbidden:
                 await styled_reply(ctx, f"❌ Failed to ban {user} in {guild.name} due to permissions.")
+
     await styled_reply(ctx, f'🌐 {user} has been globally banned from all servers.')
     await log_to_channel(f"🌐 {ctx.author} globally banned {user}. Reason: {reason}")
+
 
 @bot.command()
 async def gban(ctx, user: discord.User, *, reason=None):
