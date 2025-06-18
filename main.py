@@ -3,11 +3,10 @@ import re
 import random
 import asyncio
 import threading
-import requests
 from flask import Flask
 from discord.ext import commands
 import discord
-from discord import app_commands  # ✅ ADD THIS LINE
+from discord import app_commands
 
 # === DISCORD BOT SETUP ===
 intents = discord.Intents.default()
@@ -39,7 +38,6 @@ STREAMER_ROLE = "Streamer"
 STREAMER_CHANNEL_ID = 1207227502003757077
 LOG_CHANNEL_ID = 1372296224803258480
 
-# === Logging to a Discord channel instead of a webhook ===
 async def log_to_channel(content):
     channel = bot.get_channel(LOG_CHANNEL_ID)
     if channel:
@@ -56,13 +54,17 @@ def has_role_permission(ctx, command_name):
 @bot.event
 async def on_ready():
     print(f'Wicked RP Bot is online as {bot.user}!')
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Sync error: {e}")
 
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # === Racial slur filter ===
     slurs = ["spick", "nigger", "retarded"]
     content = message.content.lower()
     if any(slur in content for slur in slurs):
@@ -75,7 +77,6 @@ async def on_message(message):
             pass
         return
 
-    # === Link moderation ===
     link_pattern = re.compile(r"https?://[^\s]+")
     links = link_pattern.findall(message.content)
 
@@ -119,7 +120,6 @@ async def on_message(message):
 async def log_command(ctx):
     await log_to_channel(f"📌 Command used: `{ctx.command}` by {ctx.author} in #{ctx.channel}")
 
-# === Command Wrapper to delete original command and send styled embeds ===
 async def styled_reply(ctx, message: str, color=discord.Color.blurple()):
     embed = discord.Embed(description=message, color=color)
     await ctx.send(embed=embed)
@@ -147,7 +147,6 @@ async def kick(ctx, user: discord.User):
 async def ban(ctx, member: discord.Member, *, reason=None):
     if not has_role_permission(ctx, "ban"):
         return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
-
     await member.ban(reason=reason)
     await styled_reply(ctx, f'🔨 {member} has been banned.')
     await log_to_channel(f"🔨 {ctx.author} banned {member} in {ctx.guild.name}. Reason: {reason}")
@@ -229,11 +228,9 @@ async def ungban(ctx, user: discord.User):
 async def giverole(ctx, member: discord.Member, role_id: int):
     if not has_role_permission(ctx, "giverole"):
         return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
-
     role = ctx.guild.get_role(role_id)
     if not role:
         return await styled_reply(ctx, "❌ Invalid role ID provided.", discord.Color.red())
-
     try:
         await member.add_roles(role, reason=f"Given by {ctx.author}")
         await styled_reply(ctx, f'🎖️ Gave `{role.name}` to {member.mention}')
@@ -247,11 +244,9 @@ async def giverole(ctx, member: discord.Member, role_id: int):
 async def takerole(ctx, member: discord.Member, role_id: int):
     if not has_role_permission(ctx, "giverole"):
         return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
-
     role = ctx.guild.get_role(role_id)
     if not role:
         return await styled_reply(ctx, "❌ Invalid role ID provided.", discord.Color.red())
-
     try:
         await member.remove_roles(role, reason=f"Removed by {ctx.author}")
         await styled_reply(ctx, f'🧼 Removed `{role.name}` from {member.mention}')
@@ -278,26 +273,15 @@ async def giveaway(ctx, duration: int, *, prize: str):
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
 
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"Sync error: {e}")
-
 @bot.tree.command(name="clear", description="Delete a number of messages from the channel")
 @app_commands.describe(number_of_messages="The number of messages to delete (max 100)")
 async def clear(interaction: discord.Interaction, number_of_messages: int):
     if not interaction.user.guild_permissions.manage_messages:
         await interaction.response.send_message("❌ You don't have permission to do that.", ephemeral=True)
         return
-
     deleted = await interaction.channel.purge(limit=number_of_messages)
     await interaction.response.send_message(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
 
-# === FLASK KEEP-ALIVE SERVER ===
 app = Flask(__name__)
 
 @app.route('/')
