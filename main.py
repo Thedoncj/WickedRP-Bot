@@ -13,7 +13,7 @@ import signal
 # === CONFIGURATION ===
 ALERT_CHANNEL_ID = 1384717083652264056  # This is where detailed alerts will be sent
 STREAMER_CHANNEL_ID = 1207227502003757077
-LOG_CHANNEL_ID = 1372296224803258480
+LOG_CHANNEL_ID = 1384882351678689431
 STREAMER_ROLE = "Streamer"
 
 # === DISCORD BOT SETUP ===
@@ -121,12 +121,32 @@ async def on_message(message):
     if len(message.content) > 400 or message.content.count("\n") > 5:
         await send_alert_to_channel(f":anger_right: **Possible Spam** from {message.author} in #{message.channel}: {message.content[:400]}")
 
-    # Link filtering
-    link_pattern = re.compile(r"https?://[^\s]+")
+   # Track user link timestamps
+user_link_log = defaultdict(list)
+
+link_pattern = re.compile(r"https?://[^\s]+")
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
     links = link_pattern.findall(message.content)
     if links:
         has_privilege = any(role.name in LINK_PRIVILEGED_ROLES for role in message.author.roles)
         is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
+
+        # Record each link with a timestamp
+        now = datetime.utcnow()
+        user_id = message.author.id
+        user_link_log[user_id] = [ts for ts in user_link_log[user_id] if now - ts < timedelta(minutes=3)]
+        user_link_log[user_id].extend([now] * len(links))
+
+        if len(user_link_log[user_id]) > 3:
+            alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
+            if alert_channel:
+                await alert_channel.send(f"🚨 {message.author.mention} has sent more than 3 links within 3 minutes.")
+
         for link in links:
             if "discord.gg" in link or "discord.com/invite" in link:
                 invite_code = link.split("/invite/")[-1] if "/invite/" in link else link.split("discord.gg/")[-1]
