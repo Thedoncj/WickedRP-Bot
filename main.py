@@ -424,7 +424,7 @@ async def voicemute(ctx, member: discord.Member):
     await styled_reply(ctx, f'🔇 {member} has been voice-muted.')
     await log_to_channel(f"🔈 {ctx.author} voice-muted {member} in {ctx.guild.name}")
 
-@@bot.command()
+@bot.command()
 async def gban(ctx, user: discord.User, *, reason=None):
     if not has_role_permission(ctx, "ban"):
         return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
