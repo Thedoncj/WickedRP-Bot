@@ -138,9 +138,28 @@ async def kick(interaction: discord.Interaction, user: discord.User):
     else:
         await styled_response(interaction, "❌ User not found in this server.", discord.Color.red())
 
+Here’s your updated code for the following commands:
+
+/ban
+
+/mute (text mute)
+
+/voicemute
+
+With these improvements:
+
+✅ reason is now a required argument
+🕒 time is added as an optional argument where it makes sense (mute, voicemute, ban)
+
+⏳ (Note: This only collects the time; if you want auto-unmute/auto-unban after time, let me know and I’ll add that too.)
+
+🔁 Updated Command Code:
+python
+Copy
+Edit
 @bot.tree.command(name="ban", description="Ban a member")
-@app_commands.describe(member="Member to ban", reason="Reason for the ban")
-async def ban(interaction: discord.Interaction, member: discord.Member, reason: str = "No reason provided"):
+@app_commands.describe(member="Member to ban", reason="Reason for the ban", time="Optional duration (e.g., 10m, 1h, 1d)")
+async def ban(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
     if not has_role_permission(interaction, "ban"):
         return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
 
@@ -155,38 +174,119 @@ async def ban(interaction: discord.Interaction, member: discord.Member, reason: 
         "reason": reason
     })
     save_mod_history()
-    await styled_response(interaction, f"🔨 {member} has been banned.")
+    await styled_response(interaction, f"🔨 {member} has been banned. Reason: {reason}")
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
         await log_channel.send(f"🔨 {interaction.user} banned {member} in {interaction.guild.name}. Reason: {reason}")
 
 @bot.tree.command(name="mute", description="Mute a member in text channels")
-@app_commands.describe(member="Member to mute")
-async def mute(interaction: discord.Interaction, member: discord.Member):
+@app_commands.describe(member="Member to mute", reason="Reason for the mute", time="Optional duration (e.g., 10m, 1h, 1d)")
+async def mute(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
     if not has_role_permission(interaction, "mute"):
         return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
 
     overwrite = discord.PermissionOverwrite(send_messages=False)
     for channel in interaction.guild.text_channels:
         await channel.set_permissions(member, overwrite=overwrite)
-    await styled_response(interaction, f"🔇 {member} has been muted in text channels.")
+    await styled_response(interaction, f"🔇 {member} has been muted in text channels. Reason: {reason}")
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
-        await log_channel.send(f"🔇 {interaction.user} muted {member} in text channels on {interaction.guild.name}")
+        await log_channel.send(f"🔇 {interaction.user} muted {member} in text channels on {interaction.guild.name}. Reason: {reason}")
 
 @bot.tree.command(name="voicemute", description="Mute a member in voice channels")
-@app_commands.describe(member="Member to voice mute")
-async def voicemute(interaction: discord.Interaction, member: discord.Member):
+@app_commands.describe(member="Member to voice mute", reason="Reason for the mute", time="Optional duration (e.g., 10m, 1h, 1d)")
+async def voicemute(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
     if not has_role_permission(interaction, "voicemute"):
         return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
 
     await member.edit(mute=True)
-    await styled_response(interaction, f"🔇 {member} has been voice-muted.")
+    await styled_response(interaction, f"🔇 {member} has been voice-muted. Reason: {reason}")
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
-        await log_channel.send(f"🔈 {interaction.user} voice-muted {member} in {interaction.guild.name}")
+        await log_channel.send(f"🔈 {interaction.user} voice-muted {member} in {interaction.guild.name}
 
-app = Flask(__name__)
+@bot.tree.command(name="gban", description="Globally ban a user across servers")
+@app_commands.describe(user="User to globally ban", reason="Reason for the global ban", time="Optional duration (e.g., 10m, 2h, 1d)")
+async def gban(interaction: discord.Interaction, user: discord.User, reason: str, time: str = None):
+    if not has_role_permission(interaction, "gban"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+    user_id_str = str(user.id)
+    if user_id_str not in mod_history:
+        mod_history[user_id_str] = []
+    mod_history[user_id_str].append({
+        "type": "gban",
+        "guild_id": "global",
+        "moderator": interaction.user.name,
+        "reason": reason
+    })
+    save_mod_history()
+    await styled_response(interaction, f"🚫 {user} has been globally banned. Reason: {reason}")
+
+@bot.tree.command(name="unban", description="Unban a user")
+@app_commands.describe(user_id="ID of user to unban", reason="Reason for unbanning")
+async def unban(interaction: discord.Interaction, user_id: str, reason: str):
+    if not has_role_permission(interaction, "unban"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+    user = await bot.fetch_user(int(user_id))
+    await interaction.guild.unban(user, reason=reason)
+    await styled_response(interaction, f"✅ Unbanned {user} for reason: {reason}")
+
+@bot.tree.command(name="textmute", description="Mute a user in text channels")
+@app_commands.describe(member="Member to mute", reason="Reason for mute", time="Optional duration (e.g., 10m, 1h, 1d)")
+async def textmute(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
+    if not has_role_permission(interaction, "mute"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+    overwrite = discord.PermissionOverwrite(send_messages=False)
+    for channel in interaction.guild.text_channels:
+        await channel.set_permissions(member, overwrite=overwrite)
+    await styled_response(interaction, f"🔇 {member} has been muted in text channels for reason: {reason}")
+
+@bot.tree.command(name="untextmute", description="Unmute a user in text channels")
+@app_commands.describe(member="Member to unmute", reason="Reason for unmuting")
+async def untextmute(interaction: discord.Interaction, member: discord.Member, reason: str):
+    if not has_role_permission(interaction, "mute"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+    for channel in interaction.guild.text_channels:
+        await channel.set_permissions(member, overwrite=None)
+    await styled_response(interaction, f"🔊 {member} has been unmuted in text channels. Reason: {reason}")
+
+@bot.tree.command(name="unvoicemute", description="Unmute a user in voice channels")
+@app_commands.describe(member="Member to unmute", reason="Reason for unmuting")
+async def unvoicemute(interaction: discord.Interaction, member: discord.Member, reason: str):
+    if not has_role_permission(interaction, "voicemute"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+    await member.edit(mute=False)
+    await styled_response(interaction, f"🔊 {member} has been unmuted in voice channels. Reason: {reason}")
+
+@bot.tree.command(name="warn", description="Warn a user")
+@app_commands.describe(member="User to warn", reason="Reason for warning")
+async def warn(interaction: discord.Interaction, member: discord.Member, reason: str):
+    if not has_role_permission(interaction, "warn"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+    user_id_str = str(member.id)
+    if user_id_str not in mod_history:
+        mod_history[user_id_str] = []
+    mod_history[user_id_str].append({
+        "type": "warn",
+        "guild_id": interaction.guild.id,
+        "moderator": interaction.user.name,
+        "reason": reason
+    })
+    save_mod_history()
+    await styled_response(interaction, f"⚠️ {member} has been warned. Reason: {reason}")
+
+@bot.tree.command(name="removewarn", description="Remove a warning from a user")
+@app_commands.describe(member="User to remove warning from", reason="Reason for removing warning")
+async def removewarn(interaction: discord.Interaction, member: discord.Member, reason: str):
+    if not has_role_permission(interaction, "warn"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+    user_id_str = str(member.id)
+    if user_id_str in mod_history:
+        mod_history[user_id_str] = [record for record in mod_history[user_id_str] if record["type"] != "warn"]
+        save_mod_history()
+        await styled_response(interaction, f"✅ Warning removed from {member}. Reason: {reason}")
+    else:
+        await styled_response(interaction, "⚠️ No warning history found for this user.", discord.Color.orange())
 
 @app.route('/')
 def index():
