@@ -8,6 +8,7 @@ from flask import Flask
 from discord.ext import commands
 import discord
 from discord import app_commands
+import signal
 
 # === CONFIGURATION ===
 WEBHOOK_URL = "https://discord.com/api/webhooks/1384721071705428060/GkThFDUdsrhz7TTl2Ge-hOqF_tRvVO0HN1z4DVAmIwfOd69bl6qkSm0H1MCaLwb9qkV_"
@@ -42,7 +43,40 @@ LINK_PRIVILEGED_ROLES = list(MODERATION_ROLES.keys())
 global_ban_list = set()
 known_bad_users = set()
 
-    # === Link moderation ===
+# --- Here, insert your existing functions, commands, and event handlers ---
+
+# Define your webhook notification functions
+async def send_webhook_alert(content):
+    async with aiohttp.ClientSession() as session:
+        webhook = discord.Webhook.from_url(WEBHOOK_URL, session=session)
+        await webhook.send(content, username="WickedRP Bot")
+
+async def notify_status(status):
+    message = "🟢 Bot is now ONLINE" if status == "up" else "🔴 Bot is now OFFLINE or restarting"
+    await send_webhook_alert(message)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    try:
+        await notify_status("up")
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Sync error: {e}")
+
+# Handle shutdown to notify offline
+def handle_shutdown():
+    # Schedule the webhook message in the event loop
+    asyncio.get_event_loop().create_task(send_webhook_alert("🔴 Bot is shutting down"))
+    # Stop the event loop
+    asyncio.get_event_loop().stop()
+
+# Register signal handlers for graceful shutdown
+signal.signal(signal.SIGINT, lambda s, f: handle_shutdown())
+signal.signal(signal.SIGTERM, lambda s, f: handle_shutdown())
+
+ # === Link moderation ===
     link_pattern = re.compile(r"https?://[^\s]+")
     links = link_pattern.findall(message.content)
 
@@ -355,26 +389,24 @@ async def giveaway(ctx, duration: int, *, prize: str):
     else:
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Sync error: {e}")
 
-from flask import Flask
-import threading
+@bot.tree.command(name="clear", description="Delete a number of messages from the channel")
+@app_commands.describe(number_of_messages="The number of messages to delete (max 100)")
+async def clear(interaction: discord.Interaction, number_of_messages: int):
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.response.send_message("❌ You don't have permission to do that.", ephemeral=True)
+        return
 
-app = Flask('')
+    deleted = await interaction.channel.purge(limit=number_of_messages)
+    await interaction.response.send_message(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
 
-@app.route('/')
-def home():
-    return "Bot is running"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = threading.Thread(target=run)
-    t.start()
-
-# In your main bot code, call:
-keep_alive()
-
-# Then run your bot as usual
-bot.run('your_token')
-
+# === RUN THE BOT ===
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
