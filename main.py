@@ -346,6 +346,100 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str):
     except Exception as e:
         await styled_response(interaction, f"❌ Failed to unban: {e}", discord.Color.red())
 
+@bot.tree.command(name="banlist", description="Show all banned users in this server")
+async def banlist(interaction: discord.Interaction):
+    if not has_role_permission(interaction, "ban"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+
+    banned_users = []
+    for user_id, records in mod_history.items():
+        for record in records:
+            if record["type"] == "ban" and record["guild_id"] == interaction.guild.id:
+                banned_users.append((user_id, record))
+
+    if not banned_users:
+        return await styled_response(interaction, "✅ No bans recorded in this server.")
+
+    embed = discord.Embed(title="🔨 Ban List", color=discord.Color.red())
+    for user_id, record in banned_users[:25]:  # Discord embeds max out at 25 fields
+        embed.add_field(
+            name=f"User ID: {user_id}",
+            value=f"Moderator: {record['moderator']}\nReason: {record['reason']}",
+            inline=False
+        )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="kicklist", description="Show all kicked users")
+async def kicklist(interaction: discord.Interaction):
+    if not has_role_permission(interaction, "kick"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+
+    kicked_users = []
+    for user_id, records in mod_history.items():
+        for record in records:
+            if record["type"] == "kick" and record["guild_id"] == interaction.guild.id:
+                kicked_users.append((user_id, record))
+
+    if not kicked_users:
+        return await styled_response(interaction, "✅ No kicks recorded in this server.")
+
+    embed = discord.Embed(title="👢 Kick List", color=discord.Color.orange())
+    for user_id, record in kicked_users[:25]:
+        embed.add_field(
+            name=f"User ID: {user_id}",
+            value=f"Moderator: {record['moderator']}\nReason: {record['reason']}",
+            inline=False
+        )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+@bot.tree.command(name="warnlist", description="Show all warned users")
+async def warnlist(interaction: discord.Interaction):
+    if not has_role_permission(interaction, "warn"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+
+    warned_users = []
+    for user_id, records in mod_history.items():
+        for record in records:
+            if record["type"] == "warn" and record["guild_id"] == interaction.guild.id:
+                warned_users.append((user_id, record))
+
+    if not warned_users:
+        return await styled_response(interaction, "✅ No warnings recorded in this server.")
+
+    embed = discord.Embed(title="⚠️ Warn List", color=discord.Color.gold())
+    for user_id, record in warned_users[:25]:
+        embed.add_field(
+            name=f"User ID: {user_id}",
+            value=f"Moderator: {record['moderator']}\nReason: {record['reason']}",
+            inline=False
+        )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+@bot.tree.command(name="gbanlist", description="Show all globally banned users")
+async def gbanlist(interaction: discord.Interaction):
+    if not has_role_permission(interaction, "gban"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+
+    globally_banned_users = []
+    for user_id, records in mod_history.items():
+        for record in records:
+            if record["type"] == "gban":
+                globally_banned_users.append((user_id, record))
+
+    if not globally_banned_users:
+        return await styled_response(interaction, "✅ No global bans recorded.")
+
+    embed = discord.Embed(title="🚫 Global Ban List", color=discord.Color.dark_red())
+    for user_id, record in globally_banned_users[:25]:
+        embed.add_field(
+            name=f"User ID: {user_id}",
+            value=f"Moderator: {record['moderator']}\nReason: {record['reason']}",
+            inline=False
+        )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 # ====== YOUR FLASK APP AND SHUTDOWN LOGIC ======
 
 app = Flask(__name__)
