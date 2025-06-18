@@ -32,13 +32,8 @@ keep_alive()
 
 WEBHOOK_URL = "https://discord.com/api/webhooks/1384721071705428060/GkThFDUdsrhz7TTl2Ge-hOqF_tRvVO0HN1z4DVAmIwfOd69bl6qkSm0H1MCaLwb9qkV_"
 
-# === Fake Sentry Database (replace with real API call) ===
-known_bad_users = {
-    123456789012345678,  # Replace with real user IDs
-    987654321098765432
-}
-
 # === On Member Join: Run Checks and Alert ===
+
 @bot.event
 async def on_member_join(member: discord.Member):
     account_age = (discord.utils.utcnow() - member.created_at).days
@@ -119,4 +114,5 @@ async def ping(ctx):
 
 # === RUN THE BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+
 
