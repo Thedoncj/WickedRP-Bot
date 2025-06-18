@@ -42,6 +42,57 @@ STREAMER_CHANNEL_ID = 1207227502003757077
 LOG_CHANNEL_ID = 1384882351678689431     # Replace with your log channel ID
 STREAMER_ROLE = "Streamer"
 
+# Example: Prior moderation history
+mod_history = {
+    123456789012345678: [  # User ID
+        {"type": "ban", "guild_id": 111111111111111111, "moderator": "Alice", "reason": "Spamming"},
+        {"type": "warn", "guild_id": 222222222222222222, "moderator": "Bob", "reason": "Toxic behavior"},
+    ]
+}
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
+    if not alert_channel:
+        return
+
+    user_id = member.id
+    embed_needed = False
+    embed = discord.Embed(
+        title="🔍 New Member Alert",
+        description=f"User: {member.mention} (`{member.id}`) has joined.",
+        color=discord.Color.orange()
+    )
+
+    # 🚩 No profile picture
+    if member.avatar is None:
+        embed.add_field(name="⚠️ No Profile Picture", value="This user has the default avatar.", inline=False)
+        embed_needed = True
+
+    # 🕒 Account age check
+    account_age = datetime.now(timezone.utc) - member.created_at
+    if account_age < timedelta(days=7):
+        embed.add_field(name="⚠️ New Account", value=f"Account is only `{account_age.days}` days old.", inline=False)
+        embed_needed = True
+
+    # 🧾 Prior mod actions
+    if user_id in mod_history:
+        embed.title = "🚨 Member with Prior Moderation History Joined"
+        embed.color = discord.Color.red()
+        for record in mod_history[user_id]:
+            guild = bot.get_guild(record["guild_id"])
+            server_name = guild.name if guild else f"Guild ID {record['guild_id']}"
+            embed.add_field(
+                name=f"{record['type'].capitalize()} in {server_name}",
+                value=f"Moderator: **{record['moderator']}**\nReason: {record['reason']}",
+                inline=False
+            )
+        embed_needed = True
+
+    # Only send if something triggered
+    if embed_needed:
+        await alert_channel.send(embed=embed)
+
 # === Link pattern regex (for detecting URLs) ===
 link_pattern = re.compile(r"https?://[^\s]+")
 
