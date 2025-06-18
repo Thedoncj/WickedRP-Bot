@@ -277,6 +277,30 @@ async def giveaway(ctx, duration: int, *, prize: str):
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
 
+
+@bot.command()
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Sync error: {e}")
+
+@bot.tree.command(name="clear", description="Delete a number of messages from the channel")
+@app_commands.describe(number_of_messages="The number of messages to delete (max 100)")
+async def clear(interaction: discord.Interaction, number_of_messages: int):
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.response.send_message("❌ You don't have permission to do that.", ephemeral=True)
+        return
+
+    if number_of_messages < 1 or number_of_messages > 100:
+        await interaction.response.send_message("⚠️ Please choose a number between 1 and 100.", ephemeral=True)
+        return
+
+    deleted = await interaction.channel.purge(limit=number_of_messages)
+    await interaction.response.send_message(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
+
 # === FLASK KEEP-ALIVE SERVER ===
 app = Flask(__name__)
 
