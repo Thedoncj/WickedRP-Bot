@@ -5,7 +5,7 @@ import asyncio
 import threading
 import requests
 import signal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import Flask
 from discord.ext import commands
 import discord
