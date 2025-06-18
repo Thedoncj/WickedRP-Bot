@@ -305,8 +305,19 @@ async def shutdown(sig):
     await send_shutdown_message()
     await bot.close()
 
-# === MODERATION COMMANDS ===
+# Load moderation history from file or initialize empty
+MOD_HISTORY_FILE = "mod_history.json"
+if os.path.exists(MOD_HISTORY_FILE):
+    with open(MOD_HISTORY_FILE, 'r') as f:
+        mod_history = json.load(f)
+else:
+    mod_history = {}
 
+def save_mod_history():
+    with open(MOD_HISTORY_FILE, 'w') as f:
+        json.dump(mod_history, f, indent=4)
+
+# Your existing kick command
 @bot.command()
 async def kick(ctx, user: discord.User):
     if not has_role_permission(ctx, "kick"):
@@ -314,16 +325,58 @@ async def kick(ctx, user: discord.User):
     member = ctx.guild.get_member(user.id)
     if member:
         await member.kick()
+        # Add to kick list
+        kick_list.add(user.id)
+        # Log to history
+        user_id_str = str(user.id)
+        if user_id_str not in mod_history:
+            mod_history[user_id_str] = []
+        mod_history[user_id_str].append({
+            "type": "kick",
+            "guild_id": ctx.guild.id,
+            "moderator": ctx.author.name,
+            "reason": "N/A"  # You can extend this to accept reason if needed
+        })
+        save_mod_history()
         await styled_reply(ctx, f"👢 {member} has been kicked.")
         await log_to_channel(f"👢 {ctx.author} kicked {member} in {ctx.guild.name}")
     else:
         await styled_reply(ctx, "❌ User not found in this server.", discord.Color.red())
 
 @bot.command()
+async def warn(ctx, user: discord.User, *, reason=None):
+    # Your warning logic...
+    warn_list.add(user.id)
+    # Log to history
+    user_id_str = str(user.id)
+    if user_id_str not in mod_history:
+        mod_history[user_id_str] = []
+    mod_history[user_id_str].append({
+        "type": "warn",
+        "guild_id": ctx.guild.id,
+        "moderator": ctx.author.name,
+        "reason": reason or "No reason provided"
+    })
+    save_mod_history()
+    await styled_reply(ctx, f"⚠️ {user} has been warned.")
+    await log_to_channel(f"⚠️ {ctx.author} warned {user}. Reason: {reason}")
+
+@bot.command()
 async def ban(ctx, member: discord.Member, *, reason=None):
-    if not has_role_permission(ctx, "ban"):
-        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
     await member.ban(reason=reason)
+    # Add to ban list
+    ban_list.add(member.id)
+    # Log to history
+    user_id_str = str(member.id)
+    if user_id_str not in mod_history:
+        mod_history[user_id_str] = []
+    mod_history[user_id_str].append({
+        "type": "ban",
+        "guild_id": ctx.guild.id,
+        "moderator": ctx.author.name,
+        "reason": reason or "No reason provided"
+    })
+    save_mod_history()
     await styled_reply(ctx, f'🔨 {member} has been banned.')
     await log_to_channel(f"🔨 {ctx.author} banned {member} in {ctx.guild.name}. Reason: {reason}")
 
@@ -371,14 +424,14 @@ async def voicemute(ctx, member: discord.Member):
     await styled_reply(ctx, f'🔇 {member} has been voice-muted.')
     await log_to_channel(f"🔈 {ctx.author} voice-muted {member} in {ctx.guild.name}")
 
-@bot.command()
+@@bot.command()
 async def gban(ctx, user: discord.User, *, reason=None):
     if not has_role_permission(ctx, "ban"):
         return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
-    global global_ban_list
-    if user.id in global_ban_list:
+    global gban_list
+    if user.id in gban_list:
         return await styled_reply(ctx, f"⚠️ {user} is already globally banned.")
-    global_ban_list.add(user.id)
+    gban_list.add(user.id)
     for guild in bot.guilds:
         member = guild.get_member(user.id)
         if member:
@@ -390,15 +443,33 @@ async def gban(ctx, user: discord.User, *, reason=None):
     await log_to_channel(f"🌐 {ctx.author} globally banned {user}. Reason: {reason}")
 
 @bot.command()
-async def ungban(ctx, user: discord.User):
-    if not has_role_permission(ctx, "ban"):
-        return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
-    global global_ban_list
-    if user.id not in global_ban_list:
-        return await styled_reply(ctx, f"❌ {user} is not in the global ban list.")
-    global_ban_list.remove(user.id)
-    await styled_reply(ctx, f'✅ {user} has been removed from the global ban list.')
-    await log_to_channel(f"🌍 {ctx.author} removed {user} from global ban list")
+async def gban(ctx, user: discord.User, *, reason=None):
+    # your existing gban code...
+    global gban_list
+    if user.id in gban_list:
+        return await styled_reply(ctx, f"⚠️ {user} is already globally banned.")
+    gban_list.add(user.id)
+    # Log to history
+    user_id_str = str(user.id)
+    if user_id_str not in mod_history:
+        mod_history[user_id_str] = []
+    mod_history[user_id_str].append({
+        "type": "gban",
+        "guild_id": "global",
+        "moderator": ctx.author.name,
+        "reason": reason or "No reason provided"
+    })
+    save_mod_history()
+    # Continue with your existing gban logic...
+    for guild in bot.guilds:
+        member = guild.get_member(user.id)
+        if member:
+            try:
+                await guild.ban(member, reason=f"Global Ban: {reason}")
+            except discord.Forbidden:
+                await styled_reply(ctx, f"❌ Failed to ban {user} in {guild.name} due to permissions.")
+    await styled_reply(ctx, f'🌐 {user} has been globally banned from all servers.')
+    await log_to_channel(f"🌐 {ctx.author} globally banned {user}. Reason: {reason}")
 
 @bot.command()
 async def giverole(ctx, member: discord.Member, role_id: int):
@@ -452,6 +523,139 @@ async def giveaway(ctx, duration: int, *, prize: str):
     else:
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
+@bot.command()
+async def banlist(ctx):
+    user_id_str = str(ctx.author.id)
+    if user_id_str not in mod_history:
+        return await styled_reply(ctx, "You have no moderation history.", discord.Color.orange())
+
+    # Filter ban actions performed by the user
+    user_bans = [
+        entry for entry in mod_history.get(user_id_str, [])
+        if entry['type'] == 'ban'
+    ]
+
+    if not user_bans:
+        return await styled_reply(ctx, "You have no ban actions in your history.", discord.Color.orange())
+
+    # Build the message
+    message_lines = []
+    for entry in user_bans:
+        guild_name = "Unknown Guild"
+        guild = bot.get_guild(entry['guild_id'])
+        if guild:
+            guild_name = guild.name
+        message_lines.append(
+            f"Guild: {guild_name} | Moderator: {entry['moderator']} | Reason: {entry['reason']}"
+        )
+
+    message = "\n".join(message_lines)
+    # Send as DM to the user
+    try:
+        await ctx.author.send(f"Your ban history:\n{message}")
+        await styled_reply(ctx, "Sent your ban history via DM.", discord.Color.green())
+    except:
+        # fallback if DM fails
+        await styled_reply(ctx, "Could not send DM. Here's your ban history:\n" + message, discord.Color.green())
+
+# Similarly for kicklist
+@bot.command()
+async def kicklist(ctx):
+    user_id_str = str(ctx.author.id)
+    if user_id_str not in mod_history:
+        return await styled_reply(ctx, "You have no moderation history.", discord.Color.orange())
+
+    user_kicks = [
+        entry for entry in mod_history.get(user_id_str, [])
+        if entry['type'] == 'kick'
+    ]
+
+    if not user_kicks:
+        return await styled_reply(ctx, "You have no kick actions in your history.", discord.Color.orange())
+
+    message_lines = []
+    for entry in user_kicks:
+        guild_name = "Unknown Guild"
+        guild = bot.get_guild(entry['guild_id'])
+        if guild:
+            guild_name = guild.name
+        message_lines.append(
+            f"Guild: {guild_name} | Moderator: {entry['moderator']} | Reason: {entry['reason']}"
+        )
+
+    message = "\n".join(message_lines)
+    try:
+        await ctx.author.send(f"Your kick history:\n{message}")
+        await styled_reply(ctx, "Sent your kick history via DM.", discord.Color.green())
+    except:
+        await styled_reply(ctx, "Could not send DM. Here's your kick history:\n" + message, discord.Color.green())
+
+# Similarly for warnlist
+@bot.command()
+async def warnlist(ctx):
+    user_id_str = str(ctx.author.id)
+    if user_id_str not in mod_history:
+        return await styled_reply(ctx, "You have no moderation history.", discord.Color.orange())
+
+    user_warns = [
+        entry for entry in mod_history.get(user_id_str, [])
+        if entry['type'] == 'warn'
+    ]
+
+    if not user_warns:
+        return await styled_reply(ctx, "You have no warnings in your history.", discord.Color.orange())
+
+    message_lines = []
+    for entry in user_warns:
+        guild_name = "Unknown Guild"
+        guild = bot.get_guild(entry['guild_id'])
+        if guild:
+            guild_name = guild.name
+        message_lines.append(
+            f"Guild: {guild_name} | Moderator: {entry['moderator']} | Reason: {entry['reason']}"
+        )
+
+    message = "\n".join(message_lines)
+    try:
+        await ctx.author.send(f"Your warning history:\n{message}")
+        await styled_reply(ctx, "Sent your warning history via DM.", discord.Color.green())
+    except:
+        await styled_reply(ctx, "Could not send DM. Here's your warning history:\n" + message, discord.Color.green())
+
+# And for gbanlist
+@bot.command()
+async def gbanlist(ctx):
+    user_id_str = str(ctx.author.id)
+    if user_id_str not in mod_history:
+        return await styled_reply(ctx, "You have no moderation history.", discord.Color.orange())
+
+    user_gbans = [
+        entry for entry in mod_history.get(user_id_str, [])
+        if entry['type'] == 'gban'
+    ]
+
+    if not user_gbans:
+        return await styled_reply(ctx, "You have no global bans in your history.", discord.Color.orange())
+
+    message_lines = []
+    for entry in user_gbans:
+        guild_name = entry['guild_id']
+        if guild_name == "global":
+            guild_name = "Global"
+        else:
+            guild = bot.get_guild(entry['guild_id'])
+            if guild:
+                guild_name = guild.name
+        message_lines.append(
+            f"Guild: {guild_name} | Moderator: {entry['moderator']} | Reason: {entry['reason']}"
+        )
+
+    message = "\n".join(message_lines)
+    try:
+        await ctx.author.send(f"Your global ban history:\n{message}")
+        await styled_reply(ctx, "Sent your global ban history via DM.", discord.Color.green())
+    except:
+        await styled_reply(ctx, "Could not send DM. Here's your global ban history:\n" + message, discord.Color.green())
 
 # --- Run the bot ---
 
