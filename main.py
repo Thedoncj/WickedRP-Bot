@@ -277,8 +277,7 @@ async def giveaway(ctx, duration: int, *, prize: str):
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
 
-
-@bot.command()
+@bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
     try:
