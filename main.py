@@ -384,34 +384,4 @@ def run_flask():
 threading.Thread(target=run_flask).start()
 
 # === DISCORD BOT STARTUP ===
-async def send_shutdown_message():
-    await bot.wait_until_ready()
-    alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
-    if alert_channel:
-        embed = discord.Embed(
-            title="❌ Alert Notification",
-            description="🔴 **Bot is going OFFLINE**",
-            color=discord.Color.red()
-        )
-        embed.set_footer(text="Wicked RP Bot • Status Monitor")
-        embed.timestamp = discord.utils.utcnow()
-        await alert_channel.send(embed=embed)
-
-def setup_shutdown_handler(loop):
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.ensure_future(shutdown(sig)))
-
-async def shutdown(sig):
-    print(f"Received exit signal {sig.name}...")
-    await send_shutdown_message()
-    await bot.close()
-
-if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    setup_shutdown_handler(loop)
-    try:
-        bot.run("YOUR_BOT_TOKEN_HERE")
-    finally:
-        loop.close()
-
   bot.run("YOUR_BOT_TOKEN_HERE")
