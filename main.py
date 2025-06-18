@@ -78,44 +78,43 @@ signal.signal(signal.SIGTERM, lambda s, f: handle_shutdown())
 
  # === Link moderation ===
     link_pattern = re.compile(r"https?://[^\s]+")
-    links = link_pattern.findall(message.content)
+links = link_pattern.findall(message.content)
 
-    if links:
-        has_privilege = any(role.name in LINK_PRIVILEGED_ROLES for role in message.author.roles)
-        is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
+if links:
+    has_privilege = any(role.name in LINK_PRIVILEGED_ROLES for role in message.author.roles)
+    is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
 
-        for link in links:
-            if "discord.gg" in link or "discord.com/invite" in link:
-                invite_code = link.split("/invite/")[-1] if "/invite/" in link else link.split("discord.gg/")[-1]
-                try:
-                    invite = await bot.fetch_invite(invite_code)
-                    if invite.guild and invite.guild.id in [g.id for g in bot.guilds]:
-                        continue
-                except:
-                    pass
-                await message.delete()
-                await log_to_channel(f"🚫 Invite link deleted from {message.author} in #{message.channel}: {message.content}")
-                await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
-                return
+    for link in links:
+        if "discord.gg" in link or "discord.com/invite" in link:
+            invite_code = link.split("/invite/")[-1] if "/invite/" in link else link.split("discord.gg/")[-1]
+            try:
+                invite = await bot.fetch_invite(invite_code)
+                if invite.guild and invite.guild.id in [g.id for g in bot.guilds]:
+                    continue
+            except:
+                pass
+            await message.delete()
+            await log_to_channel(f"🚫 Invite link deleted from {message.author} in #{message.channel}: {message.content}")
+            await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
+            return
 
-            if any(domain in link for domain in ["tenor.com", "giphy.com"]):
-                continue
+        if any(domain in link for domain in ["tenor.com", "giphy.com"]):
+            continue
 
-            if (
-                message.channel.id == STREAMER_CHANNEL_ID and
-                is_streamer and
-                any(domain in link for domain in ["twitch.tv", "youtube.com", "kick.com", "tiktok"])
-            ):
-                continue
+        if (
+            message.channel.id == STREAMER_CHANNEL_ID and
+            is_streamer and
+            any(domain in link for domain in ["twitch.tv", "youtube.com", "kick.com", "tiktok"])
+        ):
+            continue
 
-            if not has_privilege:
-                await message.delete()
-                await log_to_channel(f"🚫 Link deleted from {message.author} in #{message.channel}: {message.content}")
-                await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
-                return
+        if not has_privilege:
+            await message.delete()
+            await log_to_channel(f"🚫 Link deleted from {message.author} in #{message.channel}: {message.content}")
+            await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
+            return
 
-    await bot.process_commands(message)
-
+await bot.process_commands(message)
 @bot.listen("on_command")
 async def log_command(ctx):
     await log_to_channel(f"📌 Command used: {ctx.command} by {ctx.author} in #{ctx.channel}")
