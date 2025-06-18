@@ -7,6 +7,7 @@ import requests
 from flask import Flask
 from discord.ext import commands
 import discord
+from discord import app_commands  # ✅ ADD THIS LINE
 
 # === DISCORD BOT SETUP ===
 intents = discord.Intents.default()
@@ -291,10 +292,6 @@ async def on_ready():
 async def clear(interaction: discord.Interaction, number_of_messages: int):
     if not interaction.user.guild_permissions.manage_messages:
         await interaction.response.send_message("❌ You don't have permission to do that.", ephemeral=True)
-        return
-
-    if number_of_messages < 1 or number_of_messages > 100:
-        await interaction.response.send_message("⚠️ Please choose a number between 1 and 100.", ephemeral=True)
         return
 
     deleted = await interaction.channel.purge(limit=number_of_messages)
