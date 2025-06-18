@@ -1,9 +1,11 @@
-mport os
+import os
 import re
 import random
 import asyncio
 import threading
 import requests
+import signal
+from datetime import datetime, timedelta
 from flask import Flask
 from discord.ext import commands
 import discord
@@ -16,7 +18,6 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 # === GLOBAL BAN LIST ===
 global_ban_list = set()
-known_bad_users = set()
 
 # === PERMISSIONS AND ROLES ===
 MODERATION_ROLES = {
@@ -35,6 +36,18 @@ MODERATION_ROLES = {
 }
 LINK_PRIVILEGED_ROLES = list(MODERATION_ROLES.keys())
 
+# === CONFIGURATION ===
+ALERT_CHANNEL_ID = 1384717083652264056  # Replace with your alert channel ID
+STREAMER_CHANNEL_ID = 1207227502003757077
+LOG_CHANNEL_ID = 1384882351678689431     # Replace with your log channel ID
+STREAMER_ROLE = "Streamer"
+
+# === Link pattern regex (for detecting URLs) ===
+link_pattern = re.compile(r"https?://[^\s]+")
+
+# === Data structures for link monitoring ===
+user_link_log = {}  # {user_id: [timestamps]}
+
 # --- Event handlers ---
 
 @bot.event
@@ -47,13 +60,15 @@ async def on_ready():
     except Exception as e:
         print(f"Sync error: {e}")
 
-# === CONFIGURATION ===
-ALERT_CHANNEL_ID = 1384717083652264056  # This is where detailed alerts will be sent
-STREAMER_CHANNEL_ID = 1207227502003757077
-LOG_CHANNEL_ID = 1384882351678689431     # This is where detailed logs  will be sent
-STREAMER_ROLE = "Streamer"
+    # Send startup alert
+    await send_startup_alert()
 
-# === Logging to a Discord channel instead of a webhook ===
+# === Helper functions ===
+
+async def notify_status(status):
+    # Placeholder for status notification if needed
+    pass
+
 async def log_to_channel(message: str):
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
@@ -67,6 +82,59 @@ def has_role_permission(ctx, command_name):
                 return True
     return False
 
+# --- Startup and Shutdown alerts ---
+
+async def send_startup_alert():
+    alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
+    if alert_channel:
+        embed = discord.Embed(
+            title="✅ Alert Notification",
+            description="🟢 **Bot is now ONLINE**",
+            color=discord.Color.green()
+        )
+        embed.set_footer(text="Wicked RP Bot • Status Monitor")
+        embed.timestamp = discord.utils.utcnow()
+
+        await alert_channel.send(embed=embed)
+    print(f"{bot.user.name} is online.")
+
+async def send_shutdown_message():
+    alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
+    if alert_channel:
+        embed = discord.Embed(
+            title="❌ Alert Notification",
+            description="🔴 **Bot is going OFFLINE**",
+            color=discord.Color.red()
+        )
+        embed.set_footer(text="Wicked RP Bot • Status Monitor")
+        embed.timestamp = discord.utils.utcnow()
+
+        await alert_channel.send(embed=embed)
+
+def setup_shutdown_handler(loop):
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(
+            sig,
+            lambda: asyncio.ensure_future(shutdown(sig))
+        )
+
+async def shutdown(sig):
+    print(f"Received exit signal {sig.name}...")
+    await send_shutdown_message()
+    await bot.close()
+
+# Helper for styled reply
+async def styled_reply(ctx, message: str, color=discord.Color.blurple()):
+    embed = discord.Embed(description=message, color=color)
+    sent_message = await ctx.send(embed=embed)
+    # Delete the bot's reply after 2 minutes
+    await asyncio.sleep(120)
+    try:
+        await sent_message.delete()
+    except:
+        pass
+
+# === Event handler for message content ===
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -85,18 +153,23 @@ async def on_message(message):
             pass
         return
 
-    # Link moderation
+    # --- Link moderation ---
     links = link_pattern.findall(message.content)
     if links:
+        # Check for privilege roles
         has_privilege = any(role.name in LINK_PRIVILEGED_ROLES for role in message.author.roles)
         is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
 
         # Track recent link timestamps
         now = datetime.utcnow()
         uid = message.author.id
+        user_link_log.setdefault(uid, [])
+        # Remove timestamps older than 3 minutes
         user_link_log[uid] = [ts for ts in user_link_log[uid] if now - ts < timedelta(minutes=3)]
+        # Add current timestamps
         user_link_log[uid].extend([now] * len(links))
 
+        # Alert if user sent more than 3 links in 3 minutes
         if len(user_link_log[uid]) > 3:
             alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
             if alert_channel:
@@ -105,16 +178,22 @@ async def on_message(message):
         for link in links:
             # Check for invite links
             if "discord.gg" in link or "discord.com/invite" in link:
-                invite_code = link.split("/invite/")[-1] if "/invite/" in link else link.split("discord.gg/")[-1]
-                try:
-                    invite = await bot.fetch_invite(invite_code)
-                    if invite.guild and invite.guild.id in [g.id for g in bot.guilds]:
-                        continue
-                except:
-                    pass
+                invite_code = None
+                if "discord.gg" in link:
+                    invite_code = link.split("discord.gg/")[-1]
+                elif "discord.com/invite" in link:
+                    invite_code = link.split("/invite/")[-1]
+                if invite_code:
+                    try:
+                        invite = await bot.fetch_invite(invite_code)
+                        # If invite is valid and guild is in server list, skip deletion
+                        if invite.guild and invite.guild.id in [g.id for g in bot.guilds]:
+                            continue
+                    except:
+                        pass
+                # Delete invite links
                 await message.delete()
                 log_msg = f"🚫 Invite link deleted from {message.author} in #{message.channel}: {message.content}"
-                await send_alert_to_channel(log_msg)
                 await log_to_channel(log_msg)
                 await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
                 return
@@ -135,55 +214,39 @@ async def on_message(message):
             if not has_privilege:
                 await message.delete()
                 log_msg = f"🚫 Unauthorized link from {message.author} in #{message.channel}: {message.content}"
-                await send_alert_to_channel(log_msg)
                 await log_to_channel(log_msg)
                 await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this link.")
                 return
 
     await bot.process_commands(message)
 
-@bot.listen("on_command")
-async def log_command(ctx):
+# Command to log command usage
+@bot.event
+async def on_command(ctx):
     await log_to_channel(f"📌 Command used: `{ctx.command}` by {ctx.author} in #{ctx.channel}")
 
 # === STARTUP AND SHUTDOWN ALERTS ===
 
-@bot.event
-async def on_ready():
-    alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
-    if alert_channel:
-        embed = discord.Embed(
-            title="✅ Alert Notification",
-            description="🟢 **Bot is now ONLINE**",
-            color=discord.Color.green()
-        )
-        embed.set_footer(text="Wicked RP Bot • Status Monitor")
-        embed.timestamp = discord.utils.utcnow()
+# Run the Flask app for keep-alive
+app = Flask(__name__)
 
-        await alert_channel.send(embed=embed)
-    print(f"{bot.user.name} is online.")
+@app.route('/')
+def index():
+    return "Bot is running!"
 
+def run_flask():
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
 
-async def send_shutdown_message():
-    await bot.wait_until_ready()
-    alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
-    if alert_channel:
-        embed = discord.Embed(
-            title="❌ Alert Notification",
-            description="🔴 **Bot is going OFFLINE**",
-            color=discord.Color.red()
-        )
-        embed.set_footer(text="Wicked RP Bot • Status Monitor")
-        embed.timestamp = discord.utils.utcnow()
+# Run Flask in separate thread
+threading.Thread(target=run_flask).start()
 
-        await alert_channel.send(embed=embed)
-
-
-def setup_shutdown_handler(loop):
+# --- Signal handling for graceful shutdown ---
+def start_signal_handlers():
+    loop = asyncio.get_event_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(
             sig,
-            lambda: asyncio.ensure_future(shutdown(sig))
+            lambda s=sig: asyncio.ensure_future(shutdown(s))
         )
 
 async def shutdown(sig):
@@ -191,22 +254,12 @@ async def shutdown(sig):
     await send_shutdown_message()
     await bot.close()
 
-# === Command Wrapper to delete original command and send styled embeds ===
-async def styled_reply(ctx, message: str, color=discord.Color.blurple()):
-    embed = discord.Embed(description=message, color=color)
-    await ctx.send(embed=embed)
-    try:
-        await ctx.message.delete()
-    except discord.NotFound:
-        pass
-
 # === MODERATION COMMANDS ===
 
 @bot.command()
 async def kick(ctx, user: discord.User):
     if not has_role_permission(ctx, "kick"):
         return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
-
     member = ctx.guild.get_member(user.id)
     if member:
         await member.kick()
@@ -219,7 +272,6 @@ async def kick(ctx, user: discord.User):
 async def ban(ctx, member: discord.Member, *, reason=None):
     if not has_role_permission(ctx, "ban"):
         return await styled_reply(ctx, "❌ You do not have permission to use this command.", discord.Color.red())
-
     await member.ban(reason=reason)
     await styled_reply(ctx, f'🔨 {member} has been banned.')
     await log_to_channel(f"🔨 {ctx.author} banned {member} in {ctx.guild.name}. Reason: {reason}")
@@ -350,36 +402,10 @@ async def giveaway(ctx, duration: int, *, prize: str):
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
 
-# Utility function to check roles permissions
-def has_role_permission(ctx, command_name):
-    for role in ctx.author.roles:
-        perms = MODERATION_ROLES.get(role.name)
-        if perms and ("all" in perms or command_name in perms):
-            return True
-    return False
-
-# Helper for styled reply
-async def styled_reply(ctx, message: str, color=discord.Color.blurple()):
-    embed = discord.Embed(description=message, color=color)
-    sent_message = await ctx.send(embed=embed)
-
-    # Delete the bot's reply after 2 minutes (120 seconds)
-    await asyncio.sleep(120)
-    try:
-        await sent_message.delete()
-    except:
-        pass
-
-# === FLASK KEEP-ALIVE SERVER ===
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return "Bot is running!"
-
-def run_flask():
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
-
-# === DISCORD BOT STARTUP ===
-  
-bot.run("YOUR_BOT_TOKEN_HERE")
+# === Run the bot ===
+if __name__ == "__main__":
+    # Setup signal handlers for graceful shutdown
+    start_signal_handlers()
+    # Run the bot
+    TOKEN = "YOUR_BOT_TOKEN_HERE"  # Replace with your bot token
+    bot.run(TOKEN)
