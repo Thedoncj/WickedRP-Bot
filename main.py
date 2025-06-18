@@ -299,5 +299,25 @@ async def giveaway(ctx, duration: int, *, prize: str):
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
 
-# === RUN THE BOT ===
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+from flask import Flask
+import threading
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = threading.Thread(target=run)
+    t.start()
+
+# In your main bot code, call:
+keep_alive()
+
+# Then run your bot as usual
+bot.run('your_token')
+
