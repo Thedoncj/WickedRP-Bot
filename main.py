@@ -43,10 +43,10 @@ LOG_CHANNEL_ID = 1384882351678689431     # Replace with your log channel ID
 STREAMER_ROLE = "Streamer"
 
 import json  # Needed for mod_history file operations
-kick_list = set(Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
-ban_list = set(Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
-warn_list = set(Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
-gban_list = set(Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
+kick_list = set("Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
+ban_list = set("Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
+warn_list = set("Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
+gban_list = set("Trial Moderator",  "Moderator",  "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director")
 
 # Example: Prior moderation history
 mod_history = {
