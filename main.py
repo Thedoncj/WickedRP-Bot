@@ -68,10 +68,6 @@ def has_role_permission(ctx, command_name):
     return False
 
 @bot.event
-async def on_ready():
-    print(f'Wicked RP Bot is online as {bot.user}!')
-
-@bot.event
 async def on_message(message):
     if message.author.bot:
         return
@@ -414,6 +410,8 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     setup_shutdown_handler(loop)
     try:
-        bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+        bot.run("YOUR_BOT_TOKEN_HERE")
     finally:
         loop.close()
+
+  bot.run("YOUR_BOT_TOKEN_HERE")
