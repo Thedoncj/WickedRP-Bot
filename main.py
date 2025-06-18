@@ -138,25 +138,10 @@ async def kick(interaction: discord.Interaction, user: discord.User):
     else:
         await styled_response(interaction, "❌ User not found in this server.", discord.Color.red())
 
-Here’s your updated code for the following commands:
-
-/ban
-
-/mute (text mute)
-
-/voicemute
-
-With these improvements:
-
-✅ reason is now a required argument
-🕒 time is added as an optional argument where it makes sense (mute, voicemute, ban)
-
-⏳ (Note: This only collects the time; if you want auto-unmute/auto-unban after time, let me know and I’ll add that too.)
-
-🔁 Updated Command Code:
-python
-Copy
-Edit
+@bot.tree.command(name="ban", description="Ban a member")
+@app_commands.describe(member="Member to ban", reason="Reason for the ban", time="Optional duration (e.g., 10m, 1h, 1d)")
+async def ban(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
+    
 @bot.tree.command(name="ban", description="Ban a member")
 @app_commands.describe(member="Member to ban", reason="Reason for the ban", time="Optional duration (e.g., 10m, 1h, 1d)")
 async def ban(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
