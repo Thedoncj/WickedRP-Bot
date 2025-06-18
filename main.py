@@ -101,6 +101,7 @@ async def on_message(message):
     if any(slur in content for slur in ["spick", "nigger", "retarded"]):
         await message.delete()
         await log_to_channel(f"🚫 Message from {message.author} deleted for slur usage in #{message.channel}: {message.content}")
+        await send_webhook_alert(f"🚫 Slur deleted from {message.author} in #{message.channel}: {message.content}")
         try:
             await message.channel.send(f"🚫 {message.author.mention}, your message was removed.")
             await message.author.send("⚠️ You have been warned for inappropriate language.")
@@ -129,6 +130,7 @@ async def on_message(message):
                     pass
                 await message.delete()
                 await log_to_channel(f"🚫 Invite link deleted from {message.author} in #{message.channel}: {message.content}")
+                await send_webhook_alert(f"🚫 Invite link from {message.author} deleted in #{message.channel}: {message.content}")
                 await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
                 return
 
@@ -141,21 +143,11 @@ async def on_message(message):
             if not has_privilege:
                 await message.delete()
                 await log_to_channel(f"🚫 Link deleted from {message.author} in #{message.channel}: {message.content}")
+                await send_webhook_alert(f"🚫 Unauthorized link from {message.author} deleted in #{message.channel}: {message.content}")
                 await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this link.")
                 return
 
     await bot.process_commands(message)
-
-@bot.listen("on_command")
-async def log_command(ctx):
-    await log_to_channel(f"📌 Command used: {ctx.command} by {ctx.author} in #{ctx.channel}")
-
-# === FLASK SERVER TO KEEP BOT ALIVE ===
-app = Flask(__name__)
-@app.route('/')
-def index():
-    return "Bot is running!"
-threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))).start()
 
 # === MODERATION COMMANDS ===
 
@@ -306,25 +298,6 @@ async def giveaway(ctx, duration: int, *, prize: str):
     else:
         await styled_reply(ctx, "No one entered the giveaway. 😢")
         await log_to_channel(f"🎁 {ctx.author} hosted a giveaway but no entries were received. Prize: {prize}")
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"Sync error: {e}")
-
-@bot.tree.command(name="clear", description="Delete a number of messages from the channel")
-@app_commands.describe(number_of_messages="The number of messages to delete (max 100)")
-async def clear(interaction: discord.Interaction, number_of_messages: int):
-    if not interaction.user.guild_permissions.manage_messages:
-        await interaction.response.send_message("❌ You don't have permission to do that.", ephemeral=True)
-        return
-
-    deleted = await interaction.channel.purge(limit=number_of_messages)
-    await interaction.response.send_message(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
 
 # === RUN THE BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
