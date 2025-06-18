@@ -1,4 +1,4 @@
-import os
+mport os
 import re
 import random
 import asyncio
@@ -379,9 +379,6 @@ def index():
 
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
-
-# Start Flask server in a separate thread
-threading.Thread(target=run_flask).start()
 
 # === DISCORD BOT STARTUP ===
   
