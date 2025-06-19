@@ -334,18 +334,6 @@ async def gban(interaction: discord.Interaction, user: discord.User, reason: str
         # Global unban scheduling would depend on your system specifics
         await interaction.followup.send(f"⏲️ {user} will be un-gbanned in {time} if supported.", ephemeral=True)
 
-@bot.tree.command(name="unban", description="Unban a user")
-@app_commands.describe(user_id="ID of user to unban", reason="Reason for unbanning")
-async def unban(interaction: discord.Interaction, user_id: str, reason: str):
-    if not has_role_permission(interaction, "unban"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
-    try:
-        user = await bot.fetch_user(int(user_id))
-        await interaction.guild.unban(user, reason=reason)
-        await styled_response(interaction, f"✅ Unbanned {user} for reason: {reason}")
-    except Exception as e:
-        await styled_response(interaction, f"❌ Failed to unban: {e}", discord.Color.red())
-
 @bot.tree.command(name="banlist", description="Show all banned users in this server")
 async def banlist(interaction: discord.Interaction):
     if not has_role_permission(interaction, "ban"):
@@ -471,7 +459,8 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
         await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
         @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 
-        @app_commands.describe(user="User to un-gban", reason="Reason for removing global ban")
+       @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
+@app_commands.describe(user="User to un-gban", reason="Reason for removing global ban")
 async def ungban(interaction: discord.Interaction, user: discord.User, reason: str):
     if not has_role_permission(interaction, "gban"):
         return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
@@ -499,7 +488,6 @@ async def ungban(interaction: discord.Interaction, user: discord.User, reason: s
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
         await log_channel.send(f"🌍 {interaction.user} removed global ban for {user}. Reason: {reason}")
-
 
 # ====== YOUR FLASK APP AND SHUTDOWN LOGIC ======
 
