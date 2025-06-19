@@ -457,25 +457,21 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
             await log_channel.send(f"🗑️ {interaction.user} removed role **{role.name}** from {member.mention}. Reason: {reason}")
     except Exception as e:
         await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
-        @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 
-# Utility function to check roles permissions
+@bot.tree.command(name="ungban", description="Remove a user from the global ban list")
+@app_commands.describe(user="User to un-global-ban")
+async def ungban(interaction: discord.Interaction, user: discord.User):
+    if not has_role_permission(interaction, "gban"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
 
-def has_role_permission(ctx, command_name):
-    for role in ctx.author.roles:
-        perms = MODERATION_ROLES.get(role.name)
-        if perms and ("all" in perms or command_name in perms):
-            return True
-    return False
-
-# Helper for styled reply
-async def styled_reply(ctx, message: str, color=discord.Color.blurple()):
-    embed = discord.Embed(description=message, color=color)
-    await ctx.send(embed=embed)
-    try:
-        await ctx.message.delete()
-    except:
-        pass
+    user_id_str = str(user.id)
+    if user_id_str in mod_history:
+        mod_history[user_id_str] = [record for record in mod_history[user_id_str] if record["type"] != "gban"]
+        save_mod_history()
+        await styled_response(interaction, f"✅ {user} has been removed from the global ban list.")
+    else:
+        await styled_response(interaction, f"ℹ️ {user} was not found in the global ban list.")
 
 # --- Run the bot ---
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+if __name__ == "__main__":
+    bot.run(os.getenv("DISCORD_BOT_TOKEN"))
