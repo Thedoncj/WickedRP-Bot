@@ -460,6 +460,7 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
         @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 
 # Utility function to check roles permissions
+
 def has_role_permission(ctx, command_name):
     for role in ctx.author.roles:
         perms = MODERATION_ROLES.get(role.name)
