@@ -548,7 +548,8 @@ async def ungban(interaction: discord.Interaction, user: discord.User):
     else:
         await styled_response(interaction, f"ℹ️ {user} was not found in the global ban list.")
 
-// Node.js + Express example
+# Node.js + Express example
+
 app.get("/", (req, res) => {
   res.status(200).send("Bot is running!");
 });
