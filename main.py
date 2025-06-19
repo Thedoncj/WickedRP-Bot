@@ -440,6 +440,36 @@ async def gbanlist(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
+@bot.tree.command(name="giverole", description="Give a role to a member")
+@app_commands.describe(member="Member to give role to", role="Role to assign", reason="Reason for giving the role")
+async def giverole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
+    if not has_role_permission(interaction, "giverole"):
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+
+    try:
+        await member.add_roles(role, reason=f"{reason} - given by {interaction.user}")
+        await styled_response(interaction, f"✅ Gave role **{role.name}** to {member.mention}. Reason: {reason}")
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            await log_channel.send(f"✅ {interaction.user} gave role **{role.name}** to {member.mention}. Reason: {reason}")
+    except Exception as e:
+        await styled_response(interaction, f"❌ Failed to give role: {e}", discord.Color.red())
+
+@bot.tree.command(name="takerole", description="Remove a role from a member")
+@app_commands.describe(member="Member to remove role from", role="Role to remove", reason="Reason for removing the role")
+async def takerole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
+    if not has_role_permission(interaction, "giverole"):  # Same permission as giverole
+        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+
+    try:
+        await member.remove_roles(role, reason=f"{reason} - removed by {interaction.user}")
+        await styled_response(interaction, f"🗑️ Removed role **{role.name}** from {member.mention}. Reason: {reason}")
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            await log_channel.send(f"🗑️ {interaction.user} removed role **{role.name}** from {member.mention}. Reason: {reason}")
+    except Exception as e:
+        await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
+
 # ====== YOUR FLASK APP AND SHUTDOWN LOGIC ======
 
 app = Flask(__name__)
