@@ -556,3 +556,6 @@ app.get("/", (req, res) => {
 
 from keep_alive import keep_alive
 keep_alive()
+import os
+
+bot.run(os.getenv("TOKEN"))
