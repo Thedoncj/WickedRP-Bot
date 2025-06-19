@@ -461,4 +461,5 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
 
 # ====== YOUR FLASK APP AND SHUTDOWN LOGIC ======
 
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+if __name__ == "__main__":
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))  # ← ERROR: not indented!
