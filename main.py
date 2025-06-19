@@ -459,37 +459,6 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
         await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
         @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 
-       @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
-@app_commands.describe(user="User to un-gban", reason="Reason for removing global ban")
-async def ungban(interaction: discord.Interaction, user: discord.User, reason: str):
-    if not has_role_permission(interaction, "gban"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
-
-    user_id_str = str(user.id)
-
-    if user_id_str in mod_history:
-        # Remove gban records
-        original_len = len(mod_history[user_id_str])
-        mod_history[user_id_str] = [
-            record for record in mod_history[user_id_str]
-            if not (record["type"] == "gban" and record["guild_id"] == "global")
-        ]
-        if not mod_history[user_id_str]:  # Clean up empty list
-            del mod_history[user_id_str]
-        save_mod_history()
-        removed = original_len - len(mod_history.get(user_id_str, []))
-        if removed > 0:
-            await styled_response(interaction, f"✅ Removed global ban record for {user}. Reason: {reason}")
-        else:
-            await styled_response(interaction, f"ℹ️ {user} had no global ban records to remove.")
-    else:
-        await styled_response(interaction, f"ℹ️ No moderation history found for {user}.", discord.Color.orange())
-
-    log_channel = bot.get_channel(LOG_CHANNEL_ID)
-    if log_channel:
-        await log_channel.send(f"🌍 {interaction.user} removed global ban for {user}. Reason: {reason}")
-
-
 # ====== YOUR FLASK APP AND SHUTDOWN LOGIC ======
 
 app = Flask(__name__)
