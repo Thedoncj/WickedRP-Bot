@@ -163,51 +163,47 @@ async def on_member_join(member: discord.Member):
 @bot.tree.command(name="kick", description="Kick a member")
 @app_commands.describe(user="User to kick", reason="Reason for kicking")
 async def kick(interaction: discord.Interaction, user: discord.User, reason: str):
+    await interaction.response.defer()
     if not has_role_permission(interaction, "kick"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
     member = interaction.guild.get_member(user.id)
     if member:
         try:
             await member.kick(reason=f"{reason} - kicked by {interaction.user}")
-            user_id_str = str(user.id)
-            if user_id_str not in mod_history:
-                mod_history[user_id_str] = []
-            mod_history[user_id_str].append({
+            mod_history.setdefault(str(user.id), []).append({
                 "type": "kick",
                 "guild_id": interaction.guild.id,
                 "moderator": interaction.user.name,
                 "reason": reason
             })
             save_mod_history()
-            await styled_response(interaction, f"👢 {member} has been kicked. Reason: {reason}")
+            await interaction.followup.send(f"👢 {member} has been kicked. Reason: {reason}")
             log_channel = bot.get_channel(LOG_CHANNEL_ID)
             if log_channel:
                 await log_channel.send(f"👢 {interaction.user} kicked {member} in {interaction.guild.name}. Reason: {reason}")
         except Exception as e:
-            await styled_response(interaction, f"❌ Failed to kick: {e}", discord.Color.red())
+            await interaction.followup.send(f"❌ Failed to kick: {e}", ephemeral=True)
     else:
-        await styled_response(interaction, "❌ User not found in this server.", discord.Color.red())
+        await interaction.followup.send("❌ User not found in this server.", ephemeral=True)
 
 @bot.tree.command(name="ban", description="Ban a member")
 @app_commands.describe(member="Member to ban", reason="Reason for the ban", time="Optional duration (e.g., 10m, 1h, 1d)")
 async def ban(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
+    await interaction.response.defer()
     if not has_role_permission(interaction, "ban"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
     try:
         await member.ban(reason=f"{reason} - banned by {interaction.user}")
-        user_id_str = str(member.id)
-        if user_id_str not in mod_history:
-            mod_history[user_id_str] = []
-        mod_history[user_id_str].append({
+        mod_history.setdefault(str(member.id), []).append({
             "type": "ban",
             "guild_id": interaction.guild.id,
             "moderator": interaction.user.name,
             "reason": reason
         })
         save_mod_history()
-        await styled_response(interaction, f"🔨 {member} has been banned. Reason: {reason}")
+        await interaction.followup.send(f"🔨 {member} has been banned. Reason: {reason}")
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             await log_channel.send(f"🔨 {interaction.user} banned {member} in {interaction.guild.name}. Reason: {reason}")
@@ -218,21 +214,41 @@ async def ban(interaction: discord.Interaction, member: discord.Member, reason: 
             asyncio.create_task(schedule_unban(interaction.guild, member.id, unban_time))
             await interaction.followup.send(f"⏲️ {member} will be unbanned in {time}.", ephemeral=True)
     except Exception as e:
-        await styled_response(interaction, f"❌ Failed to ban: {e}", discord.Color.red())
+        await interaction.followup.send(f"❌ Failed to ban: {e}", ephemeral=True)
+
+@bot.tree.command(name="gban", description="Globally ban a user across servers")
+@app_commands.describe(user="User to globally ban", reason="Reason for the global ban", time="Optional duration (e.g., 10m, 2h, 1d)")
+async def gban(interaction: discord.Interaction, user: discord.User, reason: str, time: str = None):
+    await interaction.response.defer()
+    if not has_role_permission(interaction, "gban"):
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
+
+    mod_history.setdefault(str(user.id), []).append({
+        "type": "gban",
+        "guild_id": "global",
+        "moderator": interaction.user.name,
+        "reason": reason
+    })
+    save_mod_history()
+    await interaction.followup.send(f"🚫 {user} has been globally banned. Reason: {reason}")
+
+    if time:
+        await interaction.followup.send(f"⏲️ {user} will be un-gbanned in {time} if supported.", ephemeral=True)
 
 @bot.tree.command(name="mute", description="Mute a member in text channels")
 @app_commands.describe(member="Member to mute", reason="Reason for the mute", time="Optional duration (e.g., 10m, 1h, 1d)")
 async def mute(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
+    await interaction.response.defer()
     if not has_role_permission(interaction, "mute"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
     mute_role = discord.utils.get(interaction.guild.roles, name="Muted")
     if not mute_role:
-        return await styled_response(interaction, "❌ 'Muted' role does not exist. Please create it first.", discord.Color.red())
+        return await interaction.followup.send("❌ 'Muted' role does not exist. Please create it first.", ephemeral=True)
 
     try:
         await member.add_roles(mute_role, reason=f"{reason} - muted by {interaction.user}")
-        await styled_response(interaction, f"🔇 {member} has been muted in text channels. Reason: {reason}")
+        await interaction.followup.send(f"🔇 {member} has been muted in text channels. Reason: {reason}")
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             await log_channel.send(f"🔇 {interaction.user} muted {member} in {interaction.guild.name}. Reason: {reason}")
@@ -243,49 +259,41 @@ async def mute(interaction: discord.Interaction, member: discord.Member, reason:
             asyncio.create_task(schedule_unmute(interaction.guild, member.id, unmute_time))
             await interaction.followup.send(f"⏲️ {member} will be unmuted in {time}.", ephemeral=True)
     except Exception as e:
-        await styled_response(interaction, f"❌ Failed to mute: {e}", discord.Color.red())
+        await interaction.followup.send(f"❌ Failed to mute: {e}", ephemeral=True)
 
 @bot.tree.command(name="unmute", description="Unmute a user in text channels")
 @app_commands.describe(member="Member to unmute", reason="Reason for unmuting")
 async def unmute(interaction: discord.Interaction, member: discord.Member, reason: str):
+    await interaction.response.defer()
     if not has_role_permission(interaction, "mute"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
     mute_role = discord.utils.get(interaction.guild.roles, name="Muted")
     if not mute_role:
-        return await styled_response(interaction, "❌ 'Muted' role does not exist.", discord.Color.red())
+        return await interaction.followup.send("❌ 'Muted' role does not exist.", ephemeral=True)
 
     try:
         await member.remove_roles(mute_role, reason=f"{reason} - unmuted by {interaction.user}")
-        await styled_response(interaction, f"🔊 {member} has been unmuted in text channels. Reason: {reason}")
+        await interaction.followup.send(f"🔊 {member} has been unmuted in text channels. Reason: {reason}")
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             await log_channel.send(f"🔊 {interaction.user} unmuted {member} in {interaction.guild.name}. Reason: {reason}")
     except Exception as e:
-        await styled_response(interaction, f"❌ Failed to unmute: {e}", discord.Color.red())
-
-@bot.tree.command(name="textmute", description="Mute a user in text channels")
-@app_commands.describe(member="Member to mute", reason="Reason for mute", time="Optional duration (e.g., 10m, 1h, 1d)")
-async def textmute(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
-    await mute(interaction, member, reason, time)
-
-@bot.tree.command(name="untextmute", description="Unmute a user in text channels")
-@app_commands.describe(member="Member to unmute", reason="Reason for unmuting")
-async def untextmute(interaction: discord.Interaction, member: discord.Member, reason: str):
-    await unmute(interaction, member, reason)
+        await interaction.followup.send(f"❌ Failed to unmute: {e}", ephemeral=True)
 
 @bot.tree.command(name="voicemute", description="Mute a member in voice channels")
 @app_commands.describe(member="Member to voice mute", reason="Reason for the mute", time="Optional duration (e.g., 10m, 1h, 1d)")
 async def voicemute(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
+    await interaction.response.defer()
     if not has_role_permission(interaction, "voicemute"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
     if not member.voice or not member.voice.channel:
-        return await styled_response(interaction, f"❌ {member} is not connected to a voice channel.", discord.Color.red())
+        return await interaction.followup.send(f"❌ {member} is not connected to a voice channel.", ephemeral=True)
 
     try:
         await member.edit(mute=True, reason=f"{reason} - voice muted by {interaction.user}")
-        await styled_response(interaction, f"🔇 {member} has been voice-muted. Reason: {reason}")
+        await interaction.followup.send(f"🔇 {member} has been voice-muted. Reason: {reason}")
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             await log_channel.send(f"🔈 {interaction.user} voice-muted {member} in {interaction.guild.name}. Reason: {reason}")
@@ -296,41 +304,109 @@ async def voicemute(interaction: discord.Interaction, member: discord.Member, re
             asyncio.create_task(schedule_unvoicemute(interaction.guild, member.id, unvoicemute_time))
             await interaction.followup.send(f"⏲️ {member} will be unvoicemuted in {time}.", ephemeral=True)
     except Exception as e:
-        await styled_response(interaction, f"❌ Failed to voice mute: {e}", discord.Color.red())
+        await interaction.followup.send(f"❌ Failed to voice mute: {e}", ephemeral=True)
 
 @bot.tree.command(name="unvoicemute", description="Unmute a user in voice channels")
 @app_commands.describe(member="Member to unmute", reason="Reason for unmuting")
 async def unvoicemute(interaction: discord.Interaction, member: discord.Member, reason: str):
+    await interaction.response.defer()
     if not has_role_permission(interaction, "voicemute"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
     try:
         await member.edit(mute=False, reason=f"{reason} - voice unmuted by {interaction.user}")
-        await styled_response(interaction, f"🔊 {member} has been unmuted in voice channels. Reason: {reason}")
+        await interaction.followup.send(f"🔊 {member} has been unmuted in voice channels. Reason: {reason}")
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             await log_channel.send(f"🔊 {interaction.user} unvoicemuted {member} in {interaction.guild.name}. Reason: {reason}")
     except Exception as e:
-        await styled_response(interaction, f"❌ Failed to unvoice mute: {e}", discord.Color.red())
+        await interaction.followup.send(f"❌ Failed to unvoice mute: {e}", ephemeral=True)
+@bot.tree.command(name="warn", description="Warn a member")
+@app_commands.describe(member="Member to warn", reason="Reason for the warning")
+async def warn(interaction: discord.Interaction, member: discord.Member, reason: str):
+    await interaction.response.defer()
+    if not has_role_permission(interaction, "warn"):
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
-@bot.tree.command(name="gban", description="Globally ban a user across servers")
-@app_commands.describe(user="User to globally ban", reason="Reason for the global ban", time="Optional duration (e.g., 10m, 2h, 1d)")
-async def gban(interaction: discord.Interaction, user: discord.User, reason: str, time: str = None):
-    if not has_role_permission(interaction, "gban"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
-    user_id_str = str(user.id)
-    if user_id_str not in mod_history:
-        mod_history[user_id_str] = []
-    mod_history[user_id_str].append({
-        "type": "gban",
-        "guild_id": "global",
+    mod_history.setdefault(str(member.id), []).append({
+        "type": "warn",
+        "guild_id": interaction.guild.id,
         "moderator": interaction.user.name,
         "reason": reason
     })
     save_mod_history()
-    await styled_response(interaction, f"🚫 {user} has been globally banned. Reason: {reason}")
 
-    if time:
+    await interaction.followup.send(f"⚠️ {member} has been warned. Reason: {reason}")
+    log_channel = bot.get_channel(1372296224803258480)
+    if log_channel:
+        await log_channel.send(f"⚠️ {interaction.user} warned {member} in {interaction.guild.name}. Reason: {reason}")
+def format_case(entry):
+    return f"• {entry['type'].upper()} by {entry['moderator']}: {entry['reason']}"
+
+async def send_case_list(interaction, user_id: str, case_type: str):
+    cases = mod_history.get(user_id, [])
+    filtered = [case for case in cases if case["type"] == case_type]
+    if not filtered:
+        await interaction.followup.send(f"📂 No {case_type} records found.", ephemeral=True)
+    else:
+        formatted = "\n".join(format_case(entry) for entry in filtered)
+        await interaction.followup.send(f"📂 {case_type.upper()} Records:\n{formatted}", ephemeral=True)
+
+@bot.tree.command(name="warnlist", description="View all warnings for a user")
+@app_commands.describe(user="User to check")
+async def warnlist(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer(ephemeral=True)
+    await send_case_list(interaction, str(user.id), "warn")
+
+@bot.tree.command(name="kicklist", description="View all kicks for a user")
+@app_commands.describe(user="User to check")
+async def kicklist(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer(ephemeral=True)
+    await send_case_list(interaction, str(user.id), "kick")
+
+@bot.tree.command(name="banlist", description="View all bans for a user")
+@app_commands.describe(user="User to check")
+async def banlist(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer(ephemeral=True)
+    await send_case_list(interaction, str(user.id), "ban")
+
+@bot.tree.command(name="gbanlist", description="View all global bans for a user")
+@app_commands.describe(user="User to check")
+async def gbanlist(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer(ephemeral=True)
+    await send_case_list(interaction, str(user.id), "gban")
+@bot.tree.command(name="giverole", description="Give a role to a user")
+@app_commands.describe(member="Member to give role to", role="Role to give", reason="Reason for giving the role")
+async def giverole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
+    await interaction.response.defer()
+    if not has_role_permission(interaction, "giverole"):
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
+
+    try:
+        await member.add_roles(role, reason=f"{reason} - given by {interaction.user}")
+        await interaction.followup.send(f"✅ Role **{role.name}** has been given to {member}. Reason: {reason}")
+        log_channel = bot.get_channel(1372296224803258480)
+        if log_channel:
+            await log_channel.send(f"✅ {interaction.user} gave role **{role.name}** to {member}. Reason: {reason}")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to give role: {e}", ephemeral=True)
+
+@bot.tree.command(name="takerole", description="Remove a role from a user")
+@app_commands.describe(member="Member to remove role from", role="Role to remove", reason="Reason for removing the role")
+async def takerole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
+    await interaction.response.defer()
+    if not has_role_permission(interaction, "takerole"):
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
+
+    try:
+        await member.remove_roles(role, reason=f"{reason} - removed by {interaction.user}")
+        await interaction.followup.send(f"❎ Role **{role.name}** has been removed from {member}. Reason: {reason}")
+        log_channel = bot.get_channel(1372296224803258480)
+        if log_channel:
+            await log_channel.send(f"❎ {interaction.user} removed role **{role.name}** from {member}. Reason: {reason}")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to remove role: {e}", ephemeral=True)
+
         # Global unban scheduling would depend on your system specifics
         await interaction.followup.send(f"⏲️ {user} will be un-gbanned in {time} if supported.", ephemeral=True)
 
