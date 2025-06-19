@@ -548,13 +548,23 @@ async def ungban(interaction: discord.Interaction, user: discord.User):
     else:
         await styled_response(interaction, f"ℹ️ {user} was not found in the global ban list.")
 
-# Node.js + Express example
-app.get("/", (req, res) => {
-  res.status(200).send("Bot is running!");
-});
+from flask import Flask
+from threading import Thread
 
+app = Flask("")
+
+@app.route("/")
+def home():
+    return "Bot is running!", 200
+
+def run():
+    app.run(host="0.0.0.0", port=10000)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
 from keep_alive import keep_alive
 keep_alive()
-import os
 
+import os
 bot.run(os.getenv("TOKEN"))
