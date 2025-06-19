@@ -459,7 +459,5 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
         await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
         @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 
-# ====== DISCORD BOT TOKEN ======
-
-if __name__ == "__main__":
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))  # ← ERROR: not indented!
+# --- Run the bot ---
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
