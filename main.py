@@ -459,5 +459,22 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
         await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
         @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 
+# Utility function to check roles permissions
+def has_role_permission(ctx, command_name):
+    for role in ctx.author.roles:
+        perms = MODERATION_ROLES.get(role.name)
+        if perms and ("all" in perms or command_name in perms):
+            return True
+    return False
+
+# Helper for styled reply
+async def styled_reply(ctx, message: str, color=discord.Color.blurple()):
+    embed = discord.Embed(description=message, color=color)
+    await ctx.send(embed=embed)
+    try:
+        await ctx.message.delete()
+    except:
+        pass
+
 # --- Run the bot ---
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
