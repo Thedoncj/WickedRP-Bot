@@ -459,27 +459,3 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
         await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
         @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 
-# ====== YOUR FLASK APP AND SHUTDOWN LOGIC ======
-
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return "Bot is running!"
-
-def run_flask():
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
-
-threading.Thread(target=run_flask).start()
-
-async def shutdown(sig):
-    print(f"Received exit signal {sig.name}...")
-    await bot.close()
-
-def setup_shutdown_handler(loop):
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.ensure_future(shutdown(sig)))
-
-setup_shutdown_handler(asyncio.get_event_loop())
-
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
