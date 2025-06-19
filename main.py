@@ -459,7 +459,7 @@ async def takerole(interaction: discord.Interaction, member: discord.Member, rol
         await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
         @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 
-       @bot.tree.command(name="ungban",)
+       @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 @app_commands.describe(user="User to un-gban", reason="Reason for removing global ban")
 async def ungban(interaction: discord.Interaction, user: discord.User, reason: str):
     if not has_role_permission(interaction, "gban"):
@@ -488,6 +488,7 @@ async def ungban(interaction: discord.Interaction, user: discord.User, reason: s
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
         await log_channel.send(f"🌍 {interaction.user} removed global ban for {user}. Reason: {reason}")
+
 
 # ====== YOUR FLASK APP AND SHUTDOWN LOGIC ======
 
