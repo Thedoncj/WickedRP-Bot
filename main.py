@@ -563,8 +563,10 @@ def run():
 def keep_alive():
     t = Thread(target=run)
     t.start()
-from keep_alive import keep_alive
+
+# Start the keep-alive server
 keep_alive()
 
+# Start the Discord bot
 import os
 bot.run(os.getenv("TOKEN"))
