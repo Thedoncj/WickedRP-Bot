@@ -1,4 +1,4 @@
-nextcord-ext-no-voice==2.6.0
+git+https://github.com/nextcord/nextcord.git@no-voice#egg=nextcord
 flask==2.2.5
 requests==2.31.0
 aiohttp==3.9.3
