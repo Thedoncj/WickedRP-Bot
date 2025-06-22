@@ -158,6 +158,11 @@ async def on_member_join(member: discord.Member):
     if embed_needed:
         await alert_channel.send(embed=embed)
 
+@bot.event
+async def on_ready():
+    await bot.change_presence(status=discord.Status.online)
+    print(f"Logged in as {bot.user}")
+
 # -------- MODERATION COMMANDS --------
 
 @bot.tree.command(name="kick", description="Kick a member")
