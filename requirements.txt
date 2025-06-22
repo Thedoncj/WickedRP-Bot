@@ -1,4 +1,4 @@
-nextcord==2.6.0
+nextcord-ext-no-voice==2.6.0
 flask==2.2.5
 requests==2.31.0
 aiohttp==3.9.3
