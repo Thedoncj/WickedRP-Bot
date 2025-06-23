@@ -42,35 +42,6 @@ STREAMER_CHANNEL_ID = 1207227502003757077
 LOG_CHANNEL_ID = 1384882351678689431
 STREAMER_ROLE = "Streamer"
 
-kick_list = set(["Trial Moderator", "Moderator", "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"])
-ban_list = set(["Trial Moderator", "Moderator", "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"])
-warn_list = set(["Trial Moderator", "Moderator", "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"])
-gban_list = set(["Trial Moderator", "Moderator", "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"])
-
-mod_history = {}
-MOD_HISTORY_FILE = "mod_history.json"
-if os.path.exists(MOD_HISTORY_FILE):
-    with open(MOD_HISTORY_FILE, "r") as f:
-        mod_history = json.load(f)
-else:
-    mod_history = {}
-
-def save_mod_history():
-    with open(MOD_HISTORY_FILE, "w") as f:
-        json.dump(mod_history, f, indent=4)
-
-def has_role_permission(interaction: discord.Interaction, command_name: str):
-    for role in interaction.user.roles:
-        perms = MODERATION_ROLES.get(role.name)
-        if perms:
-            if "all" in perms or command_name in perms:
-                return True
-    return False
-
-async def styled_response(interaction, message, color=discord.Color.blurple()):
-    embed = discord.Embed(description=message, color=color)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
 # Helper to parse duration strings (e.g. "10m", "1h") into seconds
 def parse_time(time_str: str):
     pattern = re.fullmatch(r"(\d+)([smhd])", time_str.lower())
@@ -108,65 +79,11 @@ async def schedule_unmute(guild: discord.Guild, member_id: int, unmute_time: dat
             except Exception:
                 pass
 
-async def schedule_unvoicemute(guild: discord.Guild, member_id: int, unvoicemute_time: datetime):
-    await discord.utils.sleep_until(unvoicemute_time)
-    member = guild.get_member(member_id)
-    if member and member.voice and member.voice.mute:
-        try:
-            await member.edit(mute=False, reason="Temporary voice mute expired")
-        except Exception:
-            pass
-
 @bot.event
 async def on_ready():
     await bot.wait_until_ready()
     await bot.tree.sync()
     print(f"Logged in as {bot.user} and synced commands.")
-
-@bot.event
-async def on_member_join(member: discord.Member):
-    alert_channel = bot.get_channel(ALERT_CHANNEL_ID)
-    if not alert_channel:
-        return
-
-    user_id = member.id
-    embed_needed = False
-    embed = discord.Embed(
-        title="🔍 New Member Alert",
-        description=f"User: {member.mention} (`{member.id}`) has joined.",
-        color=discord.Color.orange()
-    )
-
-    if member.avatar is None:
-        embed.add_field(name="⚠️ No Profile Picture", value="This user has the default avatar.", inline=False)
-        embed_needed = True
-
-    account_age = datetime.now(timezone.utc) - member.created_at
-    if account_age < timedelta(days=7):
-        embed.add_field(name="⚠️ New Account", value=f"Account is only `{account_age.days}` days old.", inline=False)
-        embed_needed = True
-
-    user_id_str = str(user_id)
-    if user_id_str in mod_history:
-        embed.title = "🚨 Member with Prior Moderation History Joined"
-        embed.color = discord.Color.red()
-        for record in mod_history[user_id_str]:
-            guild = bot.get_guild(record["guild_id"]) if record["guild_id"] != "global" else None
-            server_name = guild.name if guild else f"Guild ID {record['guild_id']}"
-            embed.add_field(
-                name=f"{record['type'].capitalize()} in {server_name}",
-                value=f"Moderator: **{record['moderator']}**\nReason: {record['reason']}",
-                inline=False
-            )
-        embed_needed = True
-
-    if embed_needed:
-        await alert_channel.send(embed=embed)
-
-@bot.event
-async def on_ready():
-    await bot.change_presence(status=discord.Status.online)
-    print(f"Logged in as {bot.user}")
 
 # -------- MODERATION COMMANDS --------
 
