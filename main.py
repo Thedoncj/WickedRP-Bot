@@ -42,30 +42,6 @@ ban_list = set(["Trial Moderator", "Moderator", "Head Moderator", "Trial Adminis
 warn_list = set(["Trial Moderator", "Moderator", "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"])
 gban_list = set(["Trial Moderator", "Moderator", "Head Moderator", "Trial Administrator", "Administrator", "Head Administrator", "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"])
 
-mod_history = {}
-MOD_HISTORY_FILE = "mod_history.json"
-if os.path.exists(MOD_HISTORY_FILE):
-    with open(MOD_HISTORY_FILE, "r") as f:
-        mod_history = json.load(f)
-else:
-    mod_history = {}
-
-def save_mod_history():
-    with open(MOD_HISTORY_FILE, "w") as f:
-        json.dump(mod_history, f, indent=4)
-
-def has_role_permission(interaction: discord.Interaction, command_name: str):
-    for role in interaction.user.roles:
-        perms = MODERATION_ROLES.get(role.name)
-        if perms:
-            if "all" in perms or command_name in perms:
-                return True
-    return False
-
-async def styled_response(interaction, message, color=discord.Color.blurple()):
-    embed = discord.Embed(description=message, color=color)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
 # Helper to parse duration strings (e.g. "10m", "1h") into seconds
 def parse_time(time_str: str):
     pattern = re.fullmatch(r"(\d+)([smhd])", time_str.lower())
