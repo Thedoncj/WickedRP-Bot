@@ -1,4 +1,4 @@
-import os
+*import os
 import re
 import random
 import asyncio
@@ -322,24 +322,25 @@ async def send_case_list(interaction, user_id: str, case_type: str):
         formatted = "\n".join(format_case(entry) for entry in filtered)
         await interaction.followup.send(f"📂 {case_type.upper()} Records:\n{formatted}", ephemeral=True)
 
-@bot.tree.command(name="warnlist", description="View all warnings for a user")
+@bot.tree.command(name="kicklist_extended", description="View all warnings for a user")
 @app_commands.describe(user="User to check")
 async def warnlist(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(ephemeral=True)
     await send_case_list(interaction, str(user.id), "warn")
 
-@bot.tree.command(name="kicklist", description="View all kicks for a user")
+@bot.tree.command(name="kicklist_extended", description="View all kicks for a user")
 @app_commands.describe(user="User to check")
 async def kicklist(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(ephemeral=True)
     await send_case_list(interaction, str(user.id), "kick")
+
 @bot.tree.command(name="banlist_extended", description="View all bans for a user")
 @app_commands.describe(user="User to check")
 async def banlist(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(ephemeral=True)
     await send_case_list(interaction, str(user.id), "ban")
 
-@bot.tree.command(name="gbanlist", description="View all global bans for a user")
+@bot.tree.command(name="gbanlist_extended", description="View all global bans for a user")
 @app_commands.describe(user="User to check")
 async def gbanlist(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(ephemeral=True)
