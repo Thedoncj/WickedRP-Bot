@@ -204,28 +204,6 @@ async def ban(interaction: discord.Interaction, member: discord.Member, reason: 
     if not has_role_permission(interaction, "ban"):
         return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
-    try:
-        await member.ban(reason=f"{reason} - banned by {interaction.user}")
-        mod_history.setdefault(str(member.id), []).append({
-            "type": "ban",
-            "guild_id": interaction.guild.id,
-            "moderator": interaction.user.name,
-            "reason": reason
-        })
-        save_mod_history()
-        await interaction.followup.send(f"🔨 {member} has been banned. Reason: {reason}")
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(f"🔨 {interaction.user} banned {member} in {interaction.guild.name}. Reason: {reason}")
-
-        if time:
-            seconds = parse_time(time)
-            unban_time = datetime.utcnow() + timedelta(seconds=seconds)
-            asyncio.create_task(schedule_unban(interaction.guild, member.id, unban_time))
-            await interaction.followup.send(f"⏲️ {member} will be unbanned in {time}.", ephemeral=True)
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to ban: {e}", ephemeral=True)
-
 @bot.tree.command(name="gban", description="Globally ban a user across servers")
 @app_commands.describe(user="User to globally ban", reason="Reason for the global ban", time="Optional duration (e.g., 10m, 2h, 1d)")
 async def gban(interaction: discord.Interaction, user: discord.User, reason: str, time: str = None):
@@ -233,17 +211,6 @@ async def gban(interaction: discord.Interaction, user: discord.User, reason: str
     if not has_role_permission(interaction, "gban"):
         return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
-    mod_history.setdefault(str(user.id), []).append({
-        "type": "gban",
-        "guild_id": "global",
-        "moderator": interaction.user.name,
-        "reason": reason
-    })
-    save_mod_history()
-    await interaction.followup.send(f"🚫 {user} has been globally banned. Reason: {reason}")
-
-    if time:
-        await interaction.followup.send(f"⏲️ {user} will be un-gbanned in {time} if supported.", ephemeral=True)
 
 @bot.tree.command(name="mute", description="Mute a member in text channels")
 @app_commands.describe(member="Member to mute", reason="Reason for the mute", time="Optional duration (e.g., 10m, 1h, 1d)")
@@ -297,129 +264,6 @@ async def warn(interaction: discord.Interaction, member: discord.Member, reason:
     await interaction.response.defer()
     if not has_role_permission(interaction, "warn"):
         return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    mod_history.setdefault(str(member.id), []).append({
-        "type": "warn",
-        "guild_id": interaction.guild.id,
-        "moderator": interaction.user.name,
-        "reason": reason
-    })
-    save_mod_history()
-
-    await interaction.followup.send(f"⚠️ {member} has been warned. Reason: {reason}")
-    log_channel = bot.get_channel(1372296224803258480)
-    if log_channel:
-        await log_channel.send(f"⚠️ {interaction.user} warned {member} in {interaction.guild.name}. Reason: {reason}")
-def format_case(entry):
-    return f"• {entry['type'].upper()} by {entry['moderator']}: {entry['reason']}"
-
-async def send_case_list(interaction, user_id: str, case_type: str):
-    cases = mod_history.get(user_id, [])
-    filtered = [case for case in cases if case["type"] == case_type]
-    if not filtered:
-        await interaction.followup.send(f"📂 No {case_type} records found.", ephemeral=True)
-    else:
-        formatted = "\n".join(format_case(entry) for entry in filtered)
-        await interaction.followup.send(f"📂 {case_type.upper()} Records:\n{formatted}", ephemeral=True)
-
-        # Global unban scheduling would depend on your system specifics
-        await interaction.followup.send(f"⏲️ {user} will be un-gbanned in {time} if supported.", ephemeral=True)
-
-@bot.tree.command(name="banlist", description="Show all banned users in this server")
-async def banlist(interaction: discord.Interaction):
-    if not has_role_permission(interaction, "ban"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
-
-    banned_users = []
-    for user_id, records in mod_history.items():
-        for record in records:
-            if record["type"] == "ban" and record["guild_id"] == interaction.guild.id:
-                banned_users.append((user_id, record))
-
-    if not banned_users:
-        return await styled_response(interaction, "✅ No bans recorded in this server.")
-
-    embed = discord.Embed(title="🔨 Ban List", color=discord.Color.red())
-    for user_id, record in banned_users[:25]:  # Discord embeds max out at 25 fields
-        embed.add_field(
-            name=f"User ID: {user_id}",
-            value=f"Moderator: {record['moderator']}\nReason: {record['reason']}",
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="kicklist", description="Show all kicked users")
-async def kicklist(interaction: discord.Interaction):
-    if not has_role_permission(interaction, "kick"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
-
-    kicked_users = []
-    for user_id, records in mod_history.items():
-        for record in records:
-            if record["type"] == "kick" and record["guild_id"] == interaction.guild.id:
-                kicked_users.append((user_id, record))
-
-    if not kicked_users:
-        return await styled_response(interaction, "✅ No kicks recorded in this server.")
-
-    embed = discord.Embed(title="👢 Kick List", color=discord.Color.orange())
-    for user_id, record in kicked_users[:25]:
-        embed.add_field(
-            name=f"User ID: {user_id}",
-            value=f"Moderator: {record['moderator']}\nReason: {record['reason']}",
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="warnlist", description="Show all warned users")
-async def warnlist(interaction: discord.Interaction):
-    if not has_role_permission(interaction, "warn"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
-
-    warned_users = []
-    for user_id, records in mod_history.items():
-        for record in records:
-            if record["type"] == "warn" and record["guild_id"] == interaction.guild.id:
-                warned_users.append((user_id, record))
-
-    if not warned_users:
-        return await styled_response(interaction, "✅ No warnings recorded in this server.")
-
-    embed = discord.Embed(title="⚠️ Warn List", color=discord.Color.gold())
-    for user_id, record in warned_users[:25]:
-        embed.add_field(
-            name=f"User ID: {user_id}",
-            value=f"Moderator: {record['moderator']}\nReason: {record['reason']}",
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="gbanlist", description="Show all globally banned users")
-async def gbanlist(interaction: discord.Interaction):
-    if not has_role_permission(interaction, "gban"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
-
-    globally_banned_users = []
-    for user_id, records in mod_history.items():
-        for record in records:
-            if record["type"] == "gban":
-                globally_banned_users.append((user_id, record))
-
-    if not globally_banned_users:
-        return await styled_response(interaction, "✅ No global bans recorded.")
-
-    embed = discord.Embed(title="🚫 Global Ban List", color=discord.Color.dark_red())
-    for user_id, record in globally_banned_users[:25]:
-        embed.add_field(
-            name=f"User ID: {user_id}",
-            value=f"Moderator: {record['moderator']}\nReason: {record['reason']}",
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="giverole", description="Give a role to a member")
 @app_commands.describe(member="Member to give role to", role="Role to assign", reason="Reason for giving the role")
