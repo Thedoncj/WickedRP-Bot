@@ -286,47 +286,6 @@ async def unmute(interaction: discord.Interaction, member: discord.Member, reaso
     except Exception as e:
         await interaction.followup.send(f"❌ Failed to unmute: {e}", ephemeral=True)
 
-@bot.tree.command(name="voicemute", description="Mute a member in voice channels")
-@app_commands.describe(member="Member to voice mute", reason="Reason for the mute", time="Optional duration (e.g., 10m, 1h, 1d)")
-async def voicemute(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "voicemute"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    if not member.voice or not member.voice.channel:
-        return await interaction.followup.send(f"❌ {member} is not connected to a voice channel.", ephemeral=True)
-
-    try:
-        await member.edit(mute=True, reason=f"{reason} - voice muted by {interaction.user}")
-        await interaction.followup.send(f"🔇 {member} has been voice-muted. Reason: {reason}")
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(f"🔈 {interaction.user} voice-muted {member} in {interaction.guild.name}. Reason: {reason}")
-
-        if time:
-            seconds = parse_time(time)
-            unvoicemute_time = datetime.utcnow() + timedelta(seconds=seconds)
-            asyncio.create_task(schedule_unvoicemute(interaction.guild, member.id, unvoicemute_time))
-            await interaction.followup.send(f"⏲️ {member} will be unvoicemuted in {time}.", ephemeral=True)
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to voice mute: {e}", ephemeral=True)
-
-@bot.tree.command(name="unvoicemute", description="Unmute a user in voice channels")
-@app_commands.describe(member="Member to unmute", reason="Reason for unmuting")
-async def unvoicemute(interaction: discord.Interaction, member: discord.Member, reason: str):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "voicemute"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    try:
-        await member.edit(mute=False, reason=f"{reason} - voice unmuted by {interaction.user}")
-        await interaction.followup.send(f"🔊 {member} has been unmuted in voice channels. Reason: {reason}")
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(f"🔊 {interaction.user} unvoicemuted {member} in {interaction.guild.name}. Reason: {reason}")
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to unvoice mute: {e}", ephemeral=True)
-
 @bot.tree.command(name="warn", description="Warn a member")
 @app_commands.describe(member="Member to warn", reason="Reason for the warning")
 async def warn(interaction: discord.Interaction, member: discord.Member, reason: str):
