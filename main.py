@@ -28,13 +28,13 @@ MODERATION_ROLES = {
     "Head Of Staff": ["kick", "ban", "unban", "mute", "gban", "voicemute", "giverole", "all"],
     "Trial Manager": ["all"],
     "Management": ["all"],
-    "Head of Management": ["all"],
+    "Head Of Management": ["all"],
     "Co Director": ["all"],
     "Director": ["all"],
 }
 
 LINK_PRIVILEGED_ROLES = [
-    "Head Of Staff", "Trial Manager", "Management", "Head of Management", "Co Director", "Director"
+    "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"
 ]
 # === CONFIGURATION ===
 ALERT_CHANNEL_ID = 1384717083652264056
