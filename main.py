@@ -333,8 +333,7 @@ async def warnlist(interaction: discord.Interaction, user: discord.User):
 async def kicklist(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(ephemeral=True)
     await send_case_list(interaction, str(user.id), "kick")
-
-@bot.tree.command(name="banlist", description="View all bans for a user")
+@bot.tree.command(name="banlist_extended", description="View all bans for a user")
 @app_commands.describe(user="User to check")
 async def banlist(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(ephemeral=True)
