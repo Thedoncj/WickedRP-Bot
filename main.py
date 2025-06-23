@@ -326,6 +326,7 @@ async def unvoicemute(interaction: discord.Interaction, member: discord.Member, 
             await log_channel.send(f"🔊 {interaction.user} unvoicemuted {member} in {interaction.guild.name}. Reason: {reason}")
     except Exception as e:
         await interaction.followup.send(f"❌ Failed to unvoice mute: {e}", ephemeral=True)
+
 @bot.tree.command(name="warn", description="Warn a member")
 @app_commands.describe(member="Member to warn", reason="Reason for the warning")
 async def warn(interaction: discord.Interaction, member: discord.Member, reason: str):
@@ -380,6 +381,7 @@ async def banlist(interaction: discord.Interaction, user: discord.User):
 async def gbanlist(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(ephemeral=True)
     await send_case_list(interaction, str(user.id), "gban")
+
 @bot.tree.command(name="giverole", description="Give a role to a user")
 @app_commands.describe(member="Member to give role to", role="Role to give", reason="Reason for giving the role")
 async def giverole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
@@ -462,6 +464,7 @@ async def kicklist(interaction: discord.Interaction):
         )
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="warnlist", description="Show all warned users")
 async def warnlist(interaction: discord.Interaction):
     if not has_role_permission(interaction, "warn"):
@@ -485,6 +488,7 @@ async def warnlist(interaction: discord.Interaction):
         )
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="gbanlist", description="Show all globally banned users")
 async def gbanlist(interaction: discord.Interaction):
     if not has_role_permission(interaction, "gban"):
