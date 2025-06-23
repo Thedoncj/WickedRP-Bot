@@ -107,13 +107,6 @@ async def kick(interaction: discord.Interaction, user: discord.User, reason: str
     if member:
         try:
             await member.kick(reason=f"{reason} - kicked by {interaction.user}")
-            mod_history.setdefault(str(user.id), []).append({
-                "type": "kick",
-                "guild_id": interaction.guild.id,
-                "moderator": interaction.user.name,
-                "reason": reason
-            })
-            save_mod_history()
             await interaction.followup.send(f"👢 {member} has been kicked. Reason: {reason}")
             log_channel = bot.get_channel(LOG_CHANNEL_ID)
             if log_channel:
@@ -136,7 +129,6 @@ async def gban(interaction: discord.Interaction, user: discord.User, reason: str
     await interaction.response.defer()
     if not has_role_permission(interaction, "gban"):
         return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
 
 @bot.tree.command(name="mute", description="Mute a member in text channels")
 @app_commands.describe(member="Member to mute", reason="Reason for the mute", time="Optional duration (e.g., 10m, 1h, 1d)")
@@ -194,51 +186,43 @@ async def warn(interaction: discord.Interaction, member: discord.Member, reason:
 @bot.tree.command(name="giverole", description="Give a role to a member")
 @app_commands.describe(member="Member to give role to", role="Role to assign", reason="Reason for giving the role")
 async def giverole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
+    await interaction.response.defer()
     if not has_role_permission(interaction, "giverole"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
     try:
         await member.add_roles(role, reason=f"{reason} - given by {interaction.user}")
-        await styled_response(interaction, f"✅ Gave role **{role.name}** to {member.mention}. Reason: {reason}")
+        await interaction.followup.send(f"✅ Gave role **{role.name}** to {member.mention}. Reason: {reason}")
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             await log_channel.send(f"✅ {interaction.user} gave role **{role.name}** to {member.mention}. Reason: {reason}")
     except Exception as e:
-        await styled_response(interaction, f"❌ Failed to give role: {e}", discord.Color.red())
+        await interaction.followup.send(f"❌ Failed to give role: {e}", ephemeral=True)
 
 @bot.tree.command(name="takerole", description="Remove a role from a member")
 @app_commands.describe(member="Member to remove role from", role="Role to remove", reason="Reason for removing the role")
 async def takerole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
-    if not has_role_permission(interaction, "giverole"):  # Same permission as giverole
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+    await interaction.response.defer()
+    if not has_role_permission(interaction, "giverole"):
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
     try:
         await member.remove_roles(role, reason=f"{reason} - removed by {interaction.user}")
-        await styled_response(interaction, f"🗑️ Removed role **{role.name}** from {member.mention}. Reason: {reason}")
+        await interaction.followup.send(f"🗑️ Removed role **{role.name}** from {member.mention}. Reason: {reason}")
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             await log_channel.send(f"🗑️ {interaction.user} removed role **{role.name}** from {member.mention}. Reason: {reason}")
     except Exception as e:
-        await styled_response(interaction, f"❌ Failed to remove role: {e}", discord.Color.red())
+        await interaction.followup.send(f"❌ Failed to remove role: {e}", ephemeral=True)
 
 @bot.tree.command(name="ungban", description="Remove a user from the global ban list")
 @app_commands.describe(user="User to un-global-ban")
 async def ungban(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer()
     if not has_role_permission(interaction, "gban"):
-        return await styled_response(interaction, "❌ You do not have permission to use this command.", discord.Color.red())
+        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
 
-    user_id_str = str(user.id)
-    if user_id_str in mod_history:
-        mod_history[user_id_str] = [record for record in mod_history[user_id_str] if record["type"] != "gban"]
-        save_mod_history()
-        await styled_response(interaction, f"✅ {user} has been removed from the global ban list.")
-    else:
-        await styled_response(interaction, f"ℹ️ {user} was not found in the global ban list.")
-
-from flask import Flask
-from threading import Thread
-
-app = Flask("")
+    await interaction.followup.send(f"✅ {user} has been removed from the global ban list (mock response).")
 
 # === FLASK KEEP-ALIVE SERVER ===
 app = Flask(__name__)
