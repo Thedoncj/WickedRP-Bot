@@ -322,62 +322,6 @@ async def send_case_list(interaction, user_id: str, case_type: str):
         formatted = "\n".join(format_case(entry) for entry in filtered)
         await interaction.followup.send(f"📂 {case_type.upper()} Records:\n{formatted}", ephemeral=True)
 
-@bot.tree.command(name="warnlist_extended", description="View all warnings for a user")
-@app_commands.describe(user="User to check")
-async def warnlist(interaction: discord.Interaction, user: discord.User):
-    await interaction.response.defer(ephemeral=True)
-    await send_case_list(interaction, str(user.id), "warn")
-
-@bot.tree.command(name="kicklist_extended", description="View all kicks for a user")
-@app_commands.describe(user="User to check")
-async def kicklist(interaction: discord.Interaction, user: discord.User):
-    await interaction.response.defer(ephemeral=True)
-    await send_case_list(interaction, str(user.id), "kick")
-
-@bot.tree.command(name="banlist_extended", description="View all bans for a user")
-@app_commands.describe(user="User to check")
-async def banlist(interaction: discord.Interaction, user: discord.User):
-    await interaction.response.defer(ephemeral=True)
-    await send_case_list(interaction, str(user.id), "ban")
-
-@bot.tree.command(name="gbanlist_extended", description="View all global bans for a user")
-@app_commands.describe(user="User to check")
-async def gbanlist(interaction: discord.Interaction, user: discord.User):
-    await interaction.response.defer(ephemeral=True)
-    await send_case_list(interaction, str(user.id), "gban")
-
-@bot.tree.command(name="giverole", description="Give a role to a user")
-@app_commands.describe(member="Member to give role to", role="Role to give", reason="Reason for giving the role")
-async def giverole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "giverole"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    try:
-        await member.add_roles(role, reason=f"{reason} - given by {interaction.user}")
-        await interaction.followup.send(f"✅ Role **{role.name}** has been given to {member}. Reason: {reason}")
-        log_channel = bot.get_channel(1372296224803258480)
-        if log_channel:
-            await log_channel.send(f"✅ {interaction.user} gave role **{role.name}** to {member}. Reason: {reason}")
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to give role: {e}", ephemeral=True)
-
-@bot.tree.command(name="takerole", description="Remove a role from a user")
-@app_commands.describe(member="Member to remove role from", role="Role to remove", reason="Reason for removing the role")
-async def takerole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "takerole"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    try:
-        await member.remove_roles(role, reason=f"{reason} - removed by {interaction.user}")
-        await interaction.followup.send(f"❎ Role **{role.name}** has been removed from {member}. Reason: {reason}")
-        log_channel = bot.get_channel(1372296224803258480)
-        if log_channel:
-            await log_channel.send(f"❎ {interaction.user} removed role **{role.name}** from {member}. Reason: {reason}")
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to remove role: {e}", ephemeral=True)
-
         # Global unban scheduling would depend on your system specifics
         await interaction.followup.send(f"⏲️ {user} will be un-gbanned in {time} if supported.", ephemeral=True)
 
