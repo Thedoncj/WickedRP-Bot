@@ -32,6 +32,15 @@ MODERATION_ROLES = {
     "Co Director": ["all"],
     "Director": ["all"],
 }
+def has_role_permission(interaction: discord.Interaction, command: str) -> bool:
+    user_roles = [role.name for role in interaction.user.roles]
+
+    for role in user_roles:
+        if role in MODERATION_ROLES:
+            perms = MODERATION_ROLES[role]
+            if "all" in perms or command in perms:
+                return True
+    return False
 
 LINK_PRIVILEGED_ROLES = [
     "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"
