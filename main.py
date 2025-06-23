@@ -322,7 +322,7 @@ async def send_case_list(interaction, user_id: str, case_type: str):
         formatted = "\n".join(format_case(entry) for entry in filtered)
         await interaction.followup.send(f"📂 {case_type.upper()} Records:\n{formatted}", ephemeral=True)
 
-@bot.tree.command(name="kicklist_extended", description="View all warnings for a user")
+@bot.tree.command(name="warnlist_extended", description="View all warnings for a user")
 @app_commands.describe(user="User to check")
 async def warnlist(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(ephemeral=True)
