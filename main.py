@@ -1,14 +1,13 @@
+# === IMPORTS ===
 import os
 import re
 import random
 import asyncio
 import threading
-import requests
+import aiohttp
 from flask import Flask
 from discord.ext import commands
 import discord
-from datetime import datetime, timedelta
-from discord import app_commands
 
 # === DISCORD BOT SETUP ===
 intents = discord.Intents.default()
@@ -17,212 +16,154 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 global_ban_list = set()
+WEBHOOK_URL = "https://discord.com/api/webhooks/1372296254029041674/vQa8C6EMnGY4m2iOc6cYr5UmDv3pl3Uqx17vtCjhiFp3XlpbH38imSDThDkQLmv0jDL3"
 
 MODERATION_ROLES = {
     "Trial Moderator": ["kick", "mute", "voicemute"],
     "Moderator": ["kick", "mute", "voicemute"],
     "Head Moderator": ["kick", "mute", "voicemute"],
     "Trial Administrator": ["kick", "mute", "voicemute"],
-    "Administrator": ["kick", "ban", "unban", "mute", "voicemute", "giverole"],
-    "Head Administrator": ["kick", "ban", "unban", "mute", "gban", "voicemute", "giverole"],
-    "Head Of Staff": ["kick", "ban", "unban", "mute", "gban", "voicemute", "giverole", "all"],
+    "Administrator": ["kick", "ban", "unban", "mute", "voicemute"],
+    "Head Administrator": ["kick", "ban", "unban", "mute", "gban"],
+    "Head Of Staff": ["all"],
     "Trial Manager": ["all"],
     "Management": ["all"],
-    "Head Of Management": ["all"],
+    "Head of Management": ["all"],
     "Co Director": ["all"],
     "Director": ["all"],
 }
-def has_role_permission(interaction: discord.Interaction, command: str) -> bool:
-    user_roles = [role.name for role in interaction.user.roles]
 
-    for role in user_roles:
-        if role in MODERATION_ROLES:
-            perms = MODERATION_ROLES[role]
-            if "all" in perms or command in perms:
-                return True
+PRIVILEGED_ROLES = ["Head Of Staff", "Trial Manager", "Management", "Head of Management", "Co Director", "Director"]
+STREAMER_ROLE = "Streamer"
+STREAMER_CHANNEL_ID = 1207227502003757077
+ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
+
+def has_role_permission(ctx, command_name):
+    for role in ctx.author.roles:
+        for role_name, perms in MODERATION_ROLES.items():
+            if role.name.lower() == role_name.lower():
+                if perms == "all" or (perms and command_name in perms):
+                    return True
     return False
 
-LINK_PRIVILEGED_ROLES = [
-    "Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"
-]
-# === CONFIGURATION ===
-ALERT_CHANNEL_ID = 1384717083652264056
-STREAMER_CHANNEL_ID = 1207227502003757077
-LOG_CHANNEL_ID = 1384882351678689431
-STREAMER_ROLE = "Streamer"
-
-# Helper to parse duration strings (e.g. "10m", "1h") into seconds
-def parse_time(time_str: str):
-    pattern = re.fullmatch(r"(\d+)([smhd])", time_str.lower())
-    if not pattern:
-        raise ValueError("Invalid time format! Use a number followed by s/m/h/d")
-    amount, unit = pattern.groups()
-    amount = int(amount)
-    if unit == "s":
-        return amount
-    elif unit == "m":
-        return amount * 60
-    elif unit == "h":
-        return amount * 3600
-    elif unit == "d":
-        return amount * 86400
-
-# Scheduling helpers for timed unban/unmute
-
-async def schedule_unban(guild: discord.Guild, user_id: int, unban_time: datetime):
-    await discord.utils.sleep_until(unban_time)
-    try:
-        user = await bot.fetch_user(user_id)
-        await guild.unban(user, reason="Temporary ban expired")
-    except Exception:
-        pass
-
-async def schedule_unmute(guild: discord.Guild, member_id: int, unmute_time: datetime):
-    await discord.utils.sleep_until(unmute_time)
-    member = guild.get_member(member_id)
-    if member:
-        mute_role = discord.utils.get(guild.roles, name="Muted")
-        if mute_role in member.roles:
-            try:
-                await member.remove_roles(mute_role, reason="Temporary mute expired")
-            except Exception:
-                pass
+async def log_to_webhook(content):
+    async with aiohttp.ClientSession() as session:
+        await session.post(WEBHOOK_URL, json={"content": content})
 
 @bot.event
 async def on_ready():
-    await bot.wait_until_ready()
-    await bot.tree.sync()
-    print(f"Logged in as {bot.user} and synced commands.")
+    print(f'Wicked RP Bot is online as {bot.user}!')
 
-# -------- MODERATION COMMANDS --------
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
 
-@bot.tree.command(name="kick", description="Kick a member")
-@app_commands.describe(user="User to kick", reason="Reason for kicking")
-async def kick(interaction: discord.Interaction, user: discord.User, reason: str):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "kick"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    member = interaction.guild.get_member(user.id)
-    if member:
+    # === Racial slur filter ===
+    slurs = ["spick", "nigger", "retarded"]
+    content = message.content.lower()
+    if any(slur in content for slur in slurs):
+        await message.delete()
+        await log_to_webhook(f"🚫 Deleted slur message from {message.author} in #{message.channel}: `{message.content}`")
         try:
-            await member.kick(reason=f"{reason} - kicked by {interaction.user}")
-            await interaction.followup.send(f"👢 {member} has been kicked. Reason: {reason}")
-            log_channel = bot.get_channel(LOG_CHANNEL_ID)
-            if log_channel:
-                await log_channel.send(f"👢 {interaction.user} kicked {member} in {interaction.guild.name}. Reason: {reason}")
-        except Exception as e:
-            await interaction.followup.send(f"❌ Failed to kick: {e}", ephemeral=True)
+            await message.channel.send(f"🚫 {message.author.mention}, your message was removed for violating server rules.")
+        except discord.Forbidden:
+            pass
+        try:
+            await message.author.send("⚠️ You have been warned for using inappropriate language. Continued violations may lead to further actions.")
+        except discord.Forbidden:
+            pass
+        return
+
+    # === Link moderation ===
+    link_pattern = re.compile(r"https?://[^\s]+")
+    links = link_pattern.findall(message.content)
+
+    if links:
+        has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
+        is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
+
+        for link in links:
+            if "discord.gg" in link or "discord.com/invite" in link:
+                invite_code = link.split("/invite/")[-1] if "/invite/" in link else link.split("discord.gg/")[-1]
+                try:
+                    invite = await bot.fetch_invite(invite_code)
+                    if invite.guild and invite.guild.id in [g.id for g in bot.guilds]:
+                        continue
+                except:
+                    pass
+                await message.delete()
+                await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
+                await log_to_webhook(f"🚫 Deleted Discord invite from {message.author} in #{message.channel}: `{link}`")
+                return
+
+            if any(domain in link for domain in ["tenor.com", "giphy.com"]):
+                continue
+
+            if (
+                message.channel.id == STREAMER_CHANNEL_ID and
+                is_streamer and
+                any(domain in link for domain in ALLOWED_STREAMER_DOMAINS)
+            ):
+                continue
+
+            if not has_privilege:
+                await message.delete()
+                await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
+                await log_to_webhook(f"🚫 Deleted unauthorized link from {message.author} in #{message.channel}: `{link}`")
+                return
+
+    await bot.process_commands(message)
+
+@bot.event
+async def on_command(ctx):
+    await log_to_webhook(f"📝 `{ctx.command}` used by {ctx.author} in #{ctx.channel}")
+
+# === MODERATION COMMANDS ===
+
+@bot.command()
+async def kick(ctx, user: discord.User):
+    if not has_role_permission(ctx, "kick"):
+        await ctx.send("❌ You do not have permission to use this command.")
+        return
+    member = ctx.guild.get_member(user.id)
+    if member:
+        await member.kick()
+        await ctx.send(f"Kicked {member}")
+        await log_to_webhook(f"👢 {ctx.author} kicked {member}")
     else:
-        await interaction.followup.send("❌ User not found in this server.", ephemeral=True)
+        await ctx.send("User not found in this server.")
 
-@bot.tree.command(name="ban", description="Ban a member")
-@app_commands.describe(member="Member to ban", reason="Reason for the ban", time="Optional duration (e.g., 10m, 1h, 1d)")
-async def ban(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "ban"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
+@bot.command()
+async def ban(ctx, member: discord.Member, *, reason=None):
+    if not has_role_permission(ctx, "ban"):
+        await ctx.send("❌ You do not have permission to use this command.")
+        return
+    await member.ban(reason=reason)
+    await ctx.send(f'🔨 {member} has been banned.')
+    await log_to_webhook(f"🔨 {ctx.author} banned {member} | Reason: {reason or 'No reason provided'}")
 
-@bot.tree.command(name="gban", description="Globally ban a user across servers")
-@app_commands.describe(user="User to globally ban", reason="Reason for the global ban", time="Optional duration (e.g., 10m, 2h, 1d)")
-async def gban(interaction: discord.Interaction, user: discord.User, reason: str, time: str = None):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "gban"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
+@bot.command()
+async def gban(ctx, user: discord.User, *, reason=None):
+    if not has_role_permission(ctx, "ban"):
+        await ctx.send("❌ You do not have permission to use this command.")
+        return
 
-@bot.tree.command(name="mute", description="Mute a member in text channels")
-@app_commands.describe(member="Member to mute", reason="Reason for the mute", time="Optional duration (e.g., 10m, 1h, 1d)")
-async def mute(interaction: discord.Interaction, member: discord.Member, reason: str, time: str = None):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "mute"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
+    global global_ban_list
+    if user.id in global_ban_list:
+        await ctx.send(f"⚠️ {user} is already globally banned.")
+        return
 
-    mute_role = discord.utils.get(interaction.guild.roles, name="Muted")
-    if not mute_role:
-        return await interaction.followup.send("❌ 'Muted' role does not exist. Please create it first.", ephemeral=True)
-
-    try:
-        await member.add_roles(mute_role, reason=f"{reason} - muted by {interaction.user}")
-        await interaction.followup.send(f"🔇 {member} has been muted in text channels. Reason: {reason}")
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(f"🔇 {interaction.user} muted {member} in {interaction.guild.name}. Reason: {reason}")
-
-        if time:
-            seconds = parse_time(time)
-            unmute_time = datetime.utcnow() + timedelta(seconds=seconds)
-            asyncio.create_task(schedule_unmute(interaction.guild, member.id, unmute_time))
-            await interaction.followup.send(f"⏲️ {member} will be unmuted in {time}.", ephemeral=True)
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to mute: {e}", ephemeral=True)
-
-@bot.tree.command(name="unmute", description="Unmute a user in text channels")
-@app_commands.describe(member="Member to unmute", reason="Reason for unmuting")
-async def unmute(interaction: discord.Interaction, member: discord.Member, reason: str):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "mute"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    mute_role = discord.utils.get(interaction.guild.roles, name="Muted")
-    if not mute_role:
-        return await interaction.followup.send("❌ 'Muted' role does not exist.", ephemeral=True)
-
-    try:
-        await member.remove_roles(mute_role, reason=f"{reason} - unmuted by {interaction.user}")
-        await interaction.followup.send(f"🔊 {member} has been unmuted in text channels. Reason: {reason}")
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(f"🔊 {interaction.user} unmuted {member} in {interaction.guild.name}. Reason: {reason}")
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to unmute: {e}", ephemeral=True)
-
-@bot.tree.command(name="warn", description="Warn a member")
-@app_commands.describe(member="Member to warn", reason="Reason for the warning")
-async def warn(interaction: discord.Interaction, member: discord.Member, reason: str):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "warn"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-@bot.tree.command(name="giverole", description="Give a role to a member")
-@app_commands.describe(member="Member to give role to", role="Role to assign", reason="Reason for giving the role")
-async def giverole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "giverole"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    try:
-        await member.add_roles(role, reason=f"{reason} - given by {interaction.user}")
-        await interaction.followup.send(f"✅ Gave role **{role.name}** to {member.mention}. Reason: {reason}")
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(f"✅ {interaction.user} gave role **{role.name}** to {member.mention}. Reason: {reason}")
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to give role: {e}", ephemeral=True)
-
-@bot.tree.command(name="takerole", description="Remove a role from a member")
-@app_commands.describe(member="Member to remove role from", role="Role to remove", reason="Reason for removing the role")
-async def takerole(interaction: discord.Interaction, member: discord.Member, role: discord.Role, reason: str):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "giverole"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    try:
-        await member.remove_roles(role, reason=f"{reason} - removed by {interaction.user}")
-        await interaction.followup.send(f"🗑️ Removed role **{role.name}** from {member.mention}. Reason: {reason}")
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(f"🗑️ {interaction.user} removed role **{role.name}** from {member.mention}. Reason: {reason}")
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to remove role: {e}", ephemeral=True)
-
-@bot.tree.command(name="ungban", description="Remove a user from the global ban list")
-@app_commands.describe(user="User to un-global-ban")
-async def ungban(interaction: discord.Interaction, user: discord.User):
-    await interaction.response.defer()
-    if not has_role_permission(interaction, "gban"):
-        return await interaction.followup.send("❌ You do not have permission to use this command.", ephemeral=True)
-
-    await interaction.followup.send(f"✅ {user} has been removed from the global ban list (mock response).")
+    global_ban_list.add(user.id)
+    for guild in bot.guilds:
+        member = guild.get_member(user.id)
+        if member:
+            try:
+                await guild.ban(member, reason=f"Global Ban: {reason}")
+            except discord.Forbidden:
+                await ctx.send(f"❌ Failed to ban {user} in {guild.name} due to permissions.")
+    await ctx.send(f'🌐 {user} has been globally banned from all servers.')
+    await log_to_webhook(f"🌐 {ctx.author} globally banned {user} | Reason: {reason or 'No reason provided'}")
 
 # === FLASK KEEP-ALIVE SERVER ===
 app = Flask(__name__)
@@ -236,8 +177,5 @@ def run_flask():
 
 threading.Thread(target=run_flask).start()
 
+# === RUN BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
-
-# Start the Discord bot
-import os
-bot.run(os.getenv("TOKEN"))
