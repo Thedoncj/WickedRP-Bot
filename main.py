@@ -20,16 +20,16 @@ WARN_CHANNEL_ID = 1384717083652264056
 MODERATION_ROLES = {
     "Trial Moderator": ["kick", "textmute", "warn"],
     "Moderator": ["kick", "textmute", "warn"],
-    "Head Moderator": ["kick", "textmute" "warn"],
+    "Head Moderator": ["kick", "textmute", "warn"],
     "Trial Administrator": ["kick", "textmute", "giverole", "takerole", "warn"],
-    "Administrator": ["kick", "ban", "unban", "textmute", "giverole", "takerole" "warn"],
-    "Head Administrator": ["kick", "ban", "unban", "textmute", "gban", "giverole", "takerole" "warn"],
+    "Administrator": ["kick", "ban", "unban", "textmute", "giverole", "takerole", "warn"],
+    "Head Administrator": ["kick", "ban", "unban", "textmute", "gban", "giverole", "takerole", "warn"],
     "Head Of Staff": ["all"],
     "Trial Manager": ["all"],
     "Management": ["all"],
     "Head Of Management": ["all"],
     "Co Director": ["all"],
-    "Director": ["all"],
+    "Director": ["all"]
 }
 
 PRIVILEGED_ROLES = ["Head Of Staff", "Trial Manager", "Management", "Head of Management", "Co Director", "Director"]
