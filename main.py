@@ -109,8 +109,11 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-def is_above(invoker: discord.Member, target: discord.Member) -> bool:
-    return invoker.top_role > target.top_role
+# Check if invoker has permission and is above target
+
+def can_act(invoker: discord.Member, target: discord.Member, command: str):
+    from main import has_permission
+    return has_permission(invoker, command) and invoker.top_role > target.top_role
 
 # === MODERATION SLASH COMMANDS ===
 
@@ -152,6 +155,7 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
 @app_commands.describe(user="User to globally ban", reason="Reason for global ban")
 async def gban(interaction: discord.Interaction, user: discord.User, reason: str):
     await interaction.response.defer()
+    from main import has_permission
     if not has_permission(interaction.user, "gban"):
         return await interaction.followup.send("❌ You lack permission.", ephemeral=True)
     failed = []
