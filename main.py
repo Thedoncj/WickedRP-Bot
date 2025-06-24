@@ -109,6 +109,9 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+def is_above(invoker: discord.Member, target: discord.Member) -> bool:
+    return invoker.top_role > target.top_role
+
 # === MODERATION SLASH COMMANDS ===
 
 def is_higher(member1: discord.Member, member2: discord.Member) -> bool:
