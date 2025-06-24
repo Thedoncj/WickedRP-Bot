@@ -123,8 +123,7 @@ async def fail(interaction, message: str):
 @bot.tree.command(name="kick", description="Kick a member")
 @app_commands.describe(user="User to kick", reason="Reason for the kick")
 async def kick(interaction: discord.Interaction, user: discord.Member, reason: str):
-    await interaction.respo
-nse.defer()
+    await interaction.response.defer()
     if not can_act(interaction.user, user, "kick"):
         return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
     try:
