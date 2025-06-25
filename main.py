@@ -115,45 +115,41 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
     if not warn_channel:
         return
 
-    if before.position != after.position or before.name != after.name or before.permissions != after.permissions:
-        embed = discord.Embed(title="🔧 Role Updated", color=discord.Color.orange())
-        embed.add_field(name="Role", value=after.mention, inline=False)
+    # Wait for audit log to update
+    await asyncio.sleep(1)  # Wait 1 second to let audit logs catch up
 
-        if before.position != after.position:
-            embed.add_field(name="Position Changed", value=f"{before.position} → {after.position}", inline=False)
+    # Find the most recent audit log for this role
+    entry = None
+    async for log in before.guild.audit_logs(limit=5, action=discord.AuditLogAction.role_update):
+        if log.target.id == before.id:
+            entry = log
+            break
 
-        if before.name != after.name:
-            embed.add_field(name="Name Changed", value=f"`{before.name}` → `{after.name}`", inline=False)
+    executor = entry.user if entry else None
+    timestamp = entry.created_at if entry else discord.utils.utcnow()
 
-        if before.permissions != after.permissions:
-            embed.add_field(name="Permissions Changed", value="Permission set updated.", inline=False)
+    embed = discord.Embed(
+        title="🔧 Role Updated",
+        description=f"**Role:** {after.mention} (`{after.name}`)",
+        color=discord.Color.orange(),
+        timestamp=timestamp
+    )
 
-        embed.set_footer(text=f"Role ID: {after.id}")
-        await warn_channel.send(embed=embed)
+    if before.name != after.name:
+        embed.add_field(name="Name Change", value=f"`{before.name}` → `{after.name}`", inline=False)
+    if before.position != after.position:
+        embed.add_field(name="Position Change", value=f"{before.position} → {after.position}", inline=False)
+    if before.permissions != after.permissions:
+        embed.add_field(name="Permissions Change", value="Permission set updated.", inline=False)
 
+    if executor:
+        embed.set_author(name=f"Changed by {executor} ({executor.id})", icon_url=executor.display_avatar.url)
+    else:
+        embed.set_author(name="Changed by Unknown")
 
-@bot.event
-async def on_member_update(before: discord.Member, after: discord.Member):
-    warn_channel = bot.get_channel(WARN_CHANNEL_ID)
-    if not warn_channel:
-        return
-
-    added_roles = [role for role in after.roles if role not in before.roles]
-    removed_roles = [role for role in before.roles if role not in after.roles]
-
-    if added_roles or removed_roles:
-        embed = discord.Embed(title="📈 Member Role Update", color=discord.Color.blue())
-        embed.set_author(name=str(after), icon_url=after.display_avatar.url)
-        embed.set_footer(text=f"User ID: {after.id}")
-
-        if added_roles:
-            embed.add_field(name="Roles Added", value=", ".join(role.mention for role in added_roles), inline=False)
-
-        if removed_roles:
-            embed.add_field(name="Roles Removed", value=", ".join(role.mention for role in removed_roles), inline=False)
-
-        await warn_channel.send(embed=embed)
-
+    embed.set_footer(text=f"Role ID: {after.id}")
+    await warn_channel.send(embed=embed)
+    
 # Check if invoker has permission and is above target
 from main import has_permission, log_to_channel, bot
 
