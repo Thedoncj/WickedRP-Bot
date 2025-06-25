@@ -131,6 +131,7 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
         embed.set_footer(text=f"Role ID: {after.id}")
         await warn_channel.send(embed=embed)
 
+
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
     warn_channel = bot.get_channel(WARN_CHANNEL_ID)
@@ -152,7 +153,6 @@ async def on_member_update(before: discord.Member, after: discord.Member):
             embed.add_field(name="Roles Removed", value=", ".join(role.mention for role in removed_roles), inline=False)
 
         await warn_channel.send(embed=embed)
-
 
 # Check if invoker has permission and is above target
 from main import has_permission, log_to_channel, bot
