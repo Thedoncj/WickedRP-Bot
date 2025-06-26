@@ -17,6 +17,15 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 LOG_CHANNEL_ID = 1384882351678689431
 WARN_CHANNEL_ID = 1384717083652264056
 
+TICKET_CATEGORY_IDS = [
+    1282992099876274187,
+    1163567127157035218,
+    1130779266880131223,
+    1212553215606919188,
+    1212553308321874000,
+    1276565387579887616
+]
+
 MODERATION_ROLES = {
     "Trial Moderator": ["kick", "textmute", "warn"],
     "Moderator": ["kick", "textmute", "warn"],
@@ -110,18 +119,21 @@ async def on_message(message):
     await bot.process_commands(message)
 
 @bot.event
-async def on_guild_role_update(before: discord.Role, after: discord.Role):
+async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
+    # Skip if the channel is under a ticket category
+    if before.category_id in TICKET_CATEGORY_IDS:
+        return
+
+    await asyncio.sleep(2)  # Wait for audit logs to update
+
     warn_channel = bot.get_channel(WARN_CHANNEL_ID)
     if not warn_channel:
         return
 
-    # Wait for audit log to update
-    await asyncio.sleep(1)  # Wait 1 second to let audit logs catch up
-
-    # Find the most recent audit log for this role
+    # Try to find who changed it
     entry = None
-    async for log in before.guild.audit_logs(limit=5, action=discord.AuditLogAction.role_update):
-        if log.target.id == before.id:
+    async for log in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.channel_update):
+        if log.target.id == before.id and (discord.utils.utcnow() - log.created_at).total_seconds() < 10:
             entry = log
             break
 
@@ -129,25 +141,25 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
     timestamp = entry.created_at if entry else discord.utils.utcnow()
 
     embed = discord.Embed(
-        title="🔧 Role Updated",
-        description=f"**Role:** {after.mention} (`{after.name}`)",
-        color=discord.Color.orange(),
+        title="📁 Channel Updated",
+        description=f"**Channel:** {after.mention} (`{after.name}`)",
+        color=discord.Color.gold(),
         timestamp=timestamp
     )
 
     if before.name != after.name:
-        embed.add_field(name="Name Change", value=f"`{before.name}` → `{after.name}`", inline=False)
+        embed.add_field(name="Renamed", value=f"`{before.name}` → `{after.name}`", inline=False)
     if before.position != after.position:
-        embed.add_field(name="Position Change", value=f"{before.position} → {after.position}", inline=False)
-    if before.permissions != after.permissions:
-        embed.add_field(name="Permissions Change", value="Permission set updated.", inline=False)
+        embed.add_field(name="Moved", value=f"Position `{before.position}` → `{after.position}`", inline=False)
+    if before.overwrites != after.overwrites:
+        embed.add_field(name="Permission Changes", value="Channel permission overwrites were updated.", inline=False)
 
     if executor:
         embed.set_author(name=f"Changed by {executor} ({executor.id})", icon_url=executor.display_avatar.url)
     else:
         embed.set_author(name="Changed by Unknown")
 
-    embed.set_footer(text=f"Role ID: {after.id}")
+    embed.set_footer(text=f"Channel ID: {after.id}")
     await warn_channel.send(embed=embed)
     
 # Check if invoker has permission and is above target
