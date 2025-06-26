@@ -170,6 +170,58 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
 
     embed.set_footer(text=f"Role ID: {after.id}")
     await warn_channel.send(embed=embed)
+    
+@bot.event
+async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
+    if before.category_id in TICKET_CATEGORY_IDS:
+        return
+
+    await asyncio.sleep(2)
+
+    warn_channel = bot.get_channel(WARN_CHANNEL_ID)
+    if not warn_channel:
+        return
+
+    entry = None
+    async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.channel_update):
+        if log.target.id == before.id:
+            if (discord.utils.utcnow() - log.created_at).total_seconds() < 10:
+                entry = log
+                break
+
+    if entry and entry.user:
+        executor_name = f"{entry.user} ({entry.user.id})"
+        executor_icon = entry.user.display_avatar.url
+    elif entry:
+        executor_name = f"User ID: {entry.user_id}"
+        executor_icon = None
+    else:
+        executor_name = "Unknown"
+        executor_icon = None
+
+    timestamp = entry.created_at if entry else discord.utils.utcnow()
+
+    embed = discord.Embed(
+        title="📁 Channel Updated",
+        description=f"**Channel:** {after.mention} (`{after.name}`)",
+        color=discord.Color.gold(),
+        timestamp=timestamp
+    )
+
+    if before.name != after.name:
+        embed.add_field(name="Renamed", value=f"`{before.name}` → `{after.name}`", inline=False)
+    if before.position != after.position:
+        embed.add_field(name="Moved", value=f"Position `{before.position}` → `{after.position}`", inline=False)
+    if before.overwrites != after.overwrites:
+        embed.add_field(name="Permissions Changed", value="Permission overwrites were updated.", inline=False)
+
+    if executor_icon:
+        embed.set_author(name=f"Changed by {executor_name}", icon_url=executor_icon)
+    else:
+        embed.set_author(name=f"Changed by {executor_name}")
+
+    embed.set_footer(text=f"Channel ID: {after.id}")
+    await warn_channel.send(embed=embed)
 
 # Check if invoker has permission and is above target
 from main import has_permission, log_to_channel, bot
