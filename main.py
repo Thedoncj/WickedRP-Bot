@@ -149,10 +149,7 @@ async def on_guild_channel_update(before: discord.abc.GuildChannel, after: disco
     elif entry:
         executor_name = f"User ID: {entry.user_id}"
         executor_icon = None
-    else:
-        executor_name = "Unknown"
-        executor_icon = None
-
+    
     # Use the timestamp from the log if available
     timestamp = entry.created_at if entry else discord.utils.utcnow()
 
