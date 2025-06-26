@@ -119,25 +119,30 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+import asyncio
+from datetime import timedelta
+
 @bot.event
 async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
     if before.category_id in TICKET_CATEGORY_IDS:
         return
 
-    await asyncio.sleep(2)  # Give audit log time to update
+    await asyncio.sleep(2)  # Give Discord time to create the audit log
 
     warn_channel = bot.get_channel(WARN_CHANNEL_ID)
     if not warn_channel:
         return
 
+    # Look for a matching audit log entry
     entry = None
     async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.channel_update):
         if log.target.id == before.id:
+            # Check time window
             if (discord.utils.utcnow() - log.created_at) < timedelta(seconds=10):
                 entry = log
                 break
 
-    # Prepare user info
+    # Extract who did it
     if entry and entry.user:
         executor_name = f"{entry.user} ({entry.user.id})"
         executor_icon = entry.user.display_avatar.url
@@ -148,9 +153,10 @@ async def on_guild_channel_update(before: discord.abc.GuildChannel, after: disco
         executor_name = "Unknown"
         executor_icon = None
 
-    # Timestamp
+    # Use the timestamp from the log if available
     timestamp = entry.created_at if entry else discord.utils.utcnow()
 
+    # Create log embed
     embed = discord.Embed(
         title="📁 Channel Updated",
         description=f"**Channel:** {after.mention} (`{after.name}`)",
