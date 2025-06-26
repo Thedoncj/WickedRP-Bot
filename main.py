@@ -124,13 +124,12 @@ from datetime import timedelta
 
 @bot.event
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
-    await asyncio.sleep(2)  # Give audit logs time to populate
+    await asyncio.sleep(2)  # Wait for audit logs
 
     warn_channel = bot.get_channel(WARN_CHANNEL_ID)
     if not warn_channel:
         return
 
-    # Try to find the matching audit log entry
     entry = None
     async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.role_update):
         if log.target.id == before.id:
@@ -138,7 +137,6 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
                 entry = log
                 break
 
-    # Who did it
     if entry and entry.user:
         executor_name = f"{entry.user} ({entry.user.id})"
         executor_icon = entry.user.display_avatar.url
@@ -158,7 +156,6 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
         timestamp=timestamp
     )
 
-    # Show what changed
     if before.name != after.name:
         embed.add_field(name="Name Changed", value=f"`{before.name}` → `{after.name}`", inline=False)
     if before.position != after.position:
@@ -166,7 +163,6 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
     if before.permissions != after.permissions:
         embed.add_field(name="Permissions Changed", value="Permissions were updated.", inline=False)
 
-    # Author
     if executor_icon:
         embed.set_author(name=f"Changed by {executor_name}", icon_url=executor_icon)
     else:
