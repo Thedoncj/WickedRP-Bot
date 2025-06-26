@@ -47,6 +47,14 @@ STREAMER_ROLE = "Streamer"
 STREAMER_CHANNEL_ID = 1207227502003757077
 ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
 
+def has_permission(member: discord.Member, command: str) -> bool: 
+    for role in member.roles:
+        perms = MODERATION_ROLES.get(role.name)
+        if perms:
+            if "all" in perms or command in perms:
+                return True
+    return False
+
 # === UTILS ===
 def has_permission(member: discord.Member, command_name: str):
     for role in member.roles:
