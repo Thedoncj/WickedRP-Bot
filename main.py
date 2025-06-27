@@ -95,12 +95,16 @@ async def on_message(message):
             pass
         return
 
-   @bot.event
+ @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # ✅ Skip link checks if the message is in a ticket category
+    # Your profanity or moderation checks go here...
+
+    # === Your LINK HANDLER CODE STARTS HERE ===
+
+    # Skip link checks in ticket categories
     if message.channel.category_id in TICKET_CATEGORY_IDS:
         await bot.process_commands(message)
         return
@@ -136,6 +140,7 @@ async def on_message(message):
                 return
 
     await bot.process_commands(message)
+
 @bot.event
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
     await asyncio.sleep(2)  # Wait for audit logs
