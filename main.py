@@ -95,6 +95,16 @@ async def on_message(message):
             pass
         return
 
+   @bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # ✅ Skip link checks if the message is in a ticket category
+    if message.channel.category_id in TICKET_CATEGORY_IDS:
+        await bot.process_commands(message)
+        return
+
     link_pattern = re.compile(r"https?://[^\s]+")
     links = link_pattern.findall(message.content)
 
@@ -126,10 +136,6 @@ async def on_message(message):
                 return
 
     await bot.process_commands(message)
-
-import asyncio
-from datetime import timedelta
-
 @bot.event
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
     await asyncio.sleep(2)  # Wait for audit logs
