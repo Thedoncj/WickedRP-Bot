@@ -95,12 +95,10 @@ async def on_message(message):
             pass
         return
 
- @bot.event
+  @bot.event
 async def on_message(message):
     if message.author.bot:
         return
-
-    # Your profanity or moderation checks go here...
 
     # === Your LINK HANDLER CODE STARTS HERE ===
 
