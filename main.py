@@ -12,7 +12,7 @@ from datetime import timedelta
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = discord.Bot(intents=discord.Intents.all())
 
 # === CONFIG ===
 LOG_CHANNEL_ID = 1384882351678689431
@@ -137,7 +137,7 @@ from datetime import timedelta
 
 @bot.event
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
-    await asyncio.sleep(2)  # Wait for audit logs
+    await asyncio.sleep(2)  # Wait for audit logs to update
 
     warn_channel = bot.get_channel(WARN_CHANNEL_ID)
     if not warn_channel:
@@ -150,39 +150,57 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
                 entry = log
                 break
 
-    if entry and entry.user:
-        executor_name = f"{entry.user} ({entry.user.id})"
-        executor_icon = entry.user.display_avatar.url
-    elif entry:
-        executor_name = f"User ID: {entry.user_id}"
-        executor_icon = None
-    else:
-        executor_name = "Unknown"
-        executor_icon = None
+    executor_name = f"{entry.user} ({entry.user.id})" if entry and entry.user else "Unknown"
+    executor_icon = entry.user.display_avatar.url if entry and entry.user else None
 
-    timestamp = entry.created_at if entry else discord.utils.utcnow()
-
+    # Prepare embed if any change detected
     embed = discord.Embed(
         title="🛠️ Role Updated",
         description=f"**Role:** {after.name}",
         color=discord.Color.orange(),
-        timestamp=timestamp
+        timestamp=entry.created_at if entry else discord.utils.utcnow()
     )
 
+    changes_detected = False
+
+    # Log name change
     if before.name != after.name:
         embed.add_field(name="Name Changed", value=f"`{before.name}` → `{after.name}`", inline=False)
-    if before.position != after.position:
-        embed.add_field(name="Position Changed", value=f"{before.position} → {after.position}", inline=False)
+        changes_detected = True
+
+    # Log permission change
     if before.permissions != after.permissions:
         embed.add_field(name="Permissions Changed", value="Permissions were updated.", inline=False)
+        changes_detected = True
 
-    if executor_icon:
-        embed.set_author(name=f"Changed by {executor_name}", icon_url=executor_icon)
-    else:
-        embed.set_author(name=f"Changed by {executor_name}")
+    # Log position change
+    if before.position != after.position:
+        guild = after.guild
+        roles_sorted = sorted(guild.roles, key=lambda r: r.position, reverse=True)
 
-    embed.set_footer(text=f"Role ID: {after.id}")
-    await warn_channel.send(embed=embed)
+        moved_above = None
+        for index, role in enumerate(roles_sorted):
+            if role.id == after.id:
+                if index > 0:
+                    moved_above = roles_sorted[index - 1]
+                break
+
+        embed.add_field(
+            name="Position Changed",
+            value=f"Moved above **{moved_above.name if moved_above else 'bottom'}**",
+            inline=False
+        )
+        changes_detected = True
+
+    # Only send embed if any change was detected
+    if changes_detected:
+        if executor_icon:
+            embed.set_author(name=f"Changed by {executor_name}", icon_url=executor_icon)
+        else:
+            embed.set_author(name=f"Changed by {executor_name}")
+
+        embed.set_footer(text=f"Role ID: {after.id}")
+        await warn_channel.send(embed=embed)
     
 @bot.event
 async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
