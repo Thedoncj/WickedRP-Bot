@@ -140,7 +140,7 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
     if not warn_channel:
         return
 
-    security_role = discord.utils.get(after.guild.roles, name="WickedRP Security Team")
+    security_role = after.guild.get_role(1389249685805334558)
 
     entry = None
     async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.role_update):
@@ -171,24 +171,7 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
         embed.add_field(name="Permissions Changed", value="Permissions were updated.", inline=False)
         changes_detected = True
 
-    # Log position change
-    if before.position != after.position:
-        guild = after.guild
-        roles_sorted = sorted(guild.roles, key=lambda r: r.position, reverse=True)
-
-        moved_above = None
-        for index, role in enumerate(roles_sorted):
-            if role.id == after.id:
-                if index > 0:
-                    moved_above = roles_sorted[index - 1]
-                break
-
-        embed.add_field(
-            name="Position Changed",
-            value=f"Now above **{moved_above.name if moved_above else 'bottom'}**",
-            inline=False
-        )
-        changes_detected = True
+    # Removed position change logging as requested
 
     if changes_detected:
         if executor_icon:
@@ -205,7 +188,7 @@ async def on_guild_channel_update(before: discord.abc.GuildChannel, after: disco
     if before.category_id in TICKET_CATEGORY_IDS:
         return
 
-    await asyncio.sleep(2)
+    await asyncio.sleep(3)  # Increased to 3 seconds for reliability
 
     warn_channel = bot.get_channel(WARN_CHANNEL_ID)
     if not warn_channel:
@@ -213,10 +196,19 @@ async def on_guild_channel_update(before: discord.abc.GuildChannel, after: disco
 
     entry = None
     async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.channel_update):
-        if log.target.id == before.id:
+        if log.target.id in [before.id, after.id]:
             if (discord.utils.utcnow() - log.created_at).total_seconds() < 10:
                 entry = log
                 break
+
+    # Retry logic if no entry found
+    if not entry:
+        await asyncio.sleep(1)
+        async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.channel_update):
+            if log.target.id in [before.id, after.id]:
+                if (discord.utils.utcnow() - log.created_at).total_seconds() < 10:
+                    entry = log
+                    break
 
     if entry and entry.user:
         executor_name = f"{entry.user} ({entry.user.id})"
