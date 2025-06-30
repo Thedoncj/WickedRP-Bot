@@ -132,9 +132,6 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-import asyncio
-from datetime import timedelta
-
 @bot.event
 async def on_guild_role_update(before: discord.Role, after: discord.Role):
     await asyncio.sleep(2)  # Wait for audit logs to update
@@ -142,6 +139,8 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
     warn_channel = bot.get_channel(WARN_CHANNEL_ID)
     if not warn_channel:
         return
+
+    security_role = discord.utils.get(after.guild.roles, name="WickedRP Security Team")
 
     entry = None
     async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.role_update):
@@ -153,11 +152,10 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
     executor_name = f"{entry.user} ({entry.user.id})" if entry and entry.user else "Unknown"
     executor_icon = entry.user.display_avatar.url if entry and entry.user else None
 
-    # Prepare embed if any change detected
     embed = discord.Embed(
         title="🛠️ Role Updated",
-        description=f"**Role:** {after.name}",
-        color=discord.Color.orange(),
+        description=f"{security_role.mention if security_role else ''}\n**Role:** {after.name}",
+        color=discord.Color.red(),
         timestamp=entry.created_at if entry else discord.utils.utcnow()
     )
 
@@ -187,12 +185,11 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
 
         embed.add_field(
             name="Position Changed",
-            value=f"Moved above **{moved_above.name if moved_above else 'bottom'}**",
+            value=f"Now above **{moved_above.name if moved_above else 'bottom'}**",
             inline=False
         )
         changes_detected = True
 
-    # Only send embed if any change was detected
     if changes_detected:
         if executor_icon:
             embed.set_author(name=f"Changed by {executor_name}", icon_url=executor_icon)
@@ -200,6 +197,7 @@ async def on_guild_role_update(before: discord.Role, after: discord.Role):
             embed.set_author(name=f"Changed by {executor_name}")
 
         embed.set_footer(text=f"Role ID: {after.id}")
+
         await warn_channel.send(embed=embed)
     
 @bot.event
