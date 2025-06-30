@@ -251,98 +251,114 @@ def can_act(invoker: discord.Member, target: discord.Member, command: str):
 @bot.tree.command(name="kick", description="Kick a member")
 @app_commands.describe(user="User to kick", reason="Reason for the kick")
 async def kick(interaction: discord.Interaction, user: discord.Member, reason: str):
-    await interaction.response.defer(thinking=True)
-    if not can_act(interaction.user, user, "kick"):
-        return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
     try:
+        await interaction.response.defer(thinking=True)
+        if not can_act(interaction.user, user, "kick"):
+            return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
         await user.kick(reason=reason)
         await interaction.followup.send(f"👢 {user.mention} was kicked. Reason: {reason}")
         await log_to_channel(bot, f"👢 {interaction.user} kicked {user} | Reason: {reason}")
     except Exception as e:
         await interaction.followup.send("❌ Failed to kick user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to kick {user}: {e}")
+        print(f"Kick command error: {e}")
 
 @bot.tree.command(name="ban", description="Ban a member")
 @app_commands.describe(user="User to ban", reason="Reason for the ban")
 async def ban(interaction: discord.Interaction, user: discord.Member, reason: str):
-    await interaction.response.defer(thinking=True)
-    if not can_act(interaction.user, user, "ban"):
-        return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
     try:
+        await interaction.response.defer(thinking=True)
+        if not can_act(interaction.user, user, "ban"):
+            return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
         await user.ban(reason=reason)
         await interaction.followup.send(f"🔨 {user.mention} was banned. Reason: {reason}")
         await log_to_channel(bot, f"🔨 {interaction.user} banned {user} | Reason: {reason}")
     except Exception as e:
         await interaction.followup.send("❌ Failed to ban user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to ban {user}: {e}")
+        print(f"Ban command error: {e}")
 
 @bot.tree.command(name="gban", description="Globally ban a user from all servers")
 @app_commands.describe(user="User to globally ban", reason="Reason for global ban")
 async def gban(interaction: discord.Interaction, user: discord.User, reason: str):
-    await interaction.response.defer(thinking=True)
-    if not has_permission(interaction.user, "gban"):
-        return await interaction.followup.send("❌ You lack permission.", ephemeral=True)
-    failed = []
-    for guild in bot.guilds:
-        member = guild.get_member(user.id)
-        if member:
-            if not can_act(interaction.user, member, "gban"):
-                failed.append(guild.name)
-                continue
-            try:
-                await guild.ban(member, reason=f"Global Ban: {reason}")
-            except:
-                failed.append(guild.name)
-    await interaction.followup.send(f"🌐 {user.mention} globally banned. Failed in: {', '.join(failed) if failed else 'None'}")
-    await log_to_channel(bot, f"🌐 {interaction.user} globally banned {user} | Reason: {reason} | Failed in: {failed}")
+    try:
+        await interaction.response.defer(thinking=True)
+        if not has_permission(interaction.user, "gban"):
+            return await interaction.followup.send("❌ You lack permission.", ephemeral=True)
+
+        failed = []
+        for guild in bot.guilds:
+            member = guild.get_member(user.id)
+            if member:
+                if not can_act(interaction.user, member, "gban"):
+                    failed.append(guild.name)
+                    continue
+                try:
+                    await guild.ban(member, reason=f"Global Ban: {reason}")
+                except:
+                    failed.append(guild.name)
+
+        await interaction.followup.send(f"🌐 {user.mention} globally banned. Failed in: {', '.join(failed) if failed else 'None'}")
+        await log_to_channel(bot, f"🌐 {interaction.user} globally banned {user} | Reason: {reason} | Failed in: {failed}")
+    except Exception as e:
+        await interaction.followup.send("❌ Global ban failed.", ephemeral=True)
+        await log_to_channel(bot, f"❌ {interaction.user} failed to gban {user}: {e}")
+        print(f"Gban command error: {e}")
 
 @bot.tree.command(name="warn", description="Warn a member")
 @app_commands.describe(user="User to warn", reason="Reason for warning")
 async def warn(interaction: discord.Interaction, user: discord.Member, reason: str):
-    await interaction.response.defer(thinking=True)
-    if not can_act(interaction.user, user, "warn"):
-        return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
-    await interaction.followup.send(f"⚠️ {user.mention} warned. Reason: {reason}")
-    await log_to_channel(bot, f"⚠️ {interaction.user} warned {user} | Reason: {reason}")
+    try:
+        await interaction.response.defer(thinking=True)
+        if not can_act(interaction.user, user, "warn"):
+            return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
+        await interaction.followup.send(f"⚠️ {user.mention} warned. Reason: {reason}")
+        await log_to_channel(bot, f"⚠️ {interaction.user} warned {user} | Reason: {reason}")
+    except Exception as e:
+        await interaction.followup.send("❌ Failed to warn user.", ephemeral=True)
+        await log_to_channel(bot, f"❌ {interaction.user} failed to warn {user}: {e}")
+        print(f"Warn command error: {e}")
 
 @bot.tree.command(name="giverole", description="Give a role to a member")
 @app_commands.describe(user="User to give role to", role="Role to assign", reason="Reason for giving role")
 async def giverole(interaction: discord.Interaction, user: discord.Member, role: discord.Role, reason: str):
-    await interaction.response.defer(thinking=True)
-    if not can_act(interaction.user, user, "giverole"):
-        return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
     try:
+        await interaction.response.defer(thinking=True)
+        if not can_act(interaction.user, user, "giverole"):
+            return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
         await user.add_roles(role, reason=reason)
         await interaction.followup.send(f"✅ Gave {role.name} to {user.mention}. Reason: {reason}")
         await log_to_channel(bot, f"✅ {interaction.user} gave {role.name} to {user} | Reason: {reason}")
     except Exception as e:
         await interaction.followup.send("❌ Failed to give role.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to give {role.name} to {user}: {e}")
+        print(f"Giverole command error: {e}")
 
 @bot.tree.command(name="takerole", description="Remove a role from a member")
 @app_commands.describe(user="User to remove role from", role="Role to remove", reason="Reason for removing role")
 async def takerole(interaction: discord.Interaction, user: discord.Member, role: discord.Role, reason: str):
-    await interaction.response.defer(thinking=True)
-    if not can_act(interaction.user, user, "takerole"):
-        return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
     try:
+        await interaction.response.defer(thinking=True)
+        if not can_act(interaction.user, user, "takerole"):
+            return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
         await user.remove_roles(role, reason=reason)
         await interaction.followup.send(f"🗑️ Removed {role.name} from {user.mention}. Reason: {reason}")
         await log_to_channel(bot, f"🗑️ {interaction.user} removed {role.name} from {user} | Reason: {reason}")
     except Exception as e:
         await interaction.followup.send("❌ Failed to remove role.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to remove {role.name} from {user}: {e}")
+        print(f"Takerole command error: {e}")
 
 @bot.tree.command(name="textmute", description="Mute a user in text channels temporarily")
 @app_commands.describe(user="User to mute", duration="Duration in minutes", reason="Reason for muting")
 async def textmute(interaction: discord.Interaction, user: discord.Member, duration: int, reason: str):
-    await interaction.response.defer(thinking=True)
-    if not can_act(interaction.user, user, "textmute"):
-        return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
-    mute_role = discord.utils.get(interaction.guild.roles, name="Muted")
-    if not mute_role:
-        return await interaction.followup.send("❌ 'Muted' role not found.", ephemeral=True)
     try:
+        await interaction.response.defer(thinking=True)
+        if not can_act(interaction.user, user, "textmute"):
+            return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
+        mute_role = discord.utils.get(interaction.guild.roles, name="Muted")
+        if not mute_role:
+            return await interaction.followup.send("❌ 'Muted' role not found.", ephemeral=True)
         await user.add_roles(mute_role, reason=reason)
         await interaction.followup.send(f"🔇 {user.mention} muted for {duration} minutes. Reason: {reason}")
         await log_to_channel(bot, f"🔇 {interaction.user} muted {user} for {duration} minutes | Reason: {reason}")
@@ -352,23 +368,25 @@ async def textmute(interaction: discord.Interaction, user: discord.Member, durat
     except Exception as e:
         await interaction.followup.send("❌ Failed to mute user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to mute {user}: {e}")
+        print(f"Textmute command error: {e}")
 
 @bot.tree.command(name="textunmute", description="Unmute a user in text channels")
 @app_commands.describe(user="User to unmute", reason="Reason for unmuting")
 async def textunmute(interaction: discord.Interaction, user: discord.Member, reason: str):
-    await interaction.response.defer(thinking=True)
-    if not can_act(interaction.user, user, "textmute"):
-        return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
-    mute_role = discord.utils.get(interaction.guild.roles, name="Muted")
-    if not mute_role:
-        return await interaction.followup.send("❌ 'Muted' role not found.", ephemeral=True)
     try:
+        await interaction.response.defer(thinking=True)
+        if not can_act(interaction.user, user, "textmute"):
+            return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
+        mute_role = discord.utils.get(interaction.guild.roles, name="Muted")
+        if not mute_role:
+            return await interaction.followup.send("❌ 'Muted' role not found.", ephemeral=True)
         await user.remove_roles(mute_role, reason=reason)
         await interaction.followup.send(f"🔊 {user.mention} was unmuted. Reason: {reason}")
         await log_to_channel(bot, f"🔊 {interaction.user} unmuted {user} | Reason: {reason}")
     except Exception as e:
         await interaction.followup.send("❌ Failed to unmute user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unmute {user}: {e}")
+        print(f"Textunmute command error: {e}")
 
 # === KEEPALIVE ===
 app = Flask(__name__)
