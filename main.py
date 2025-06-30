@@ -12,7 +12,7 @@ from datetime import timedelta
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-bot = discord.Bot(intents=discord.Intents.all())
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 # === CONFIG ===
 LOG_CHANNEL_ID = 1384882351678689431
