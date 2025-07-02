@@ -17,6 +17,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # === CONFIG ===
 LOG_CHANNEL_ID = 1384882351678689431
 WARN_CHANNEL_ID = 1384717083652264056
+WHITELISTER_ROLE_ID = 1344882926965493823
+WHITELISTED_ROLE_ID = 1127098119750951083
 
 TICKET_CATEGORY_IDS = [
     1282992099876274187,
@@ -372,6 +374,30 @@ async def textunmute(interaction: discord.Interaction, user: discord.Member, rea
     except Exception as e:
         await interaction.followup.send("❌ Failed to unmute user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unmute {user}: {e}")
+
+@tree.command(name="wl", description="Whitelist a member by giving them the WhiteListed role")
+@app_commands.describe(member="The member you want to whitelist")
+async def wl(interaction: discord.Interaction, member: discord.Member):
+    # Check if the user has the Whitelister role
+    whitelister_role = discord.Object(id=WHITELISTER_ROLE_ID)
+    if whitelister_role not in interaction.user.roles:
+        await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
+        return
+
+    # Get the WhiteListed role
+    role = interaction.guild.get_role(WHITELISTED_ROLE_ID)
+    if not role:
+        await interaction.response.send_message("❌ The WhiteListed role does not exist.", ephemeral=True)
+        return
+
+    # Give the role to the selected member
+    try:
+        await member.add_roles(role, reason=f"Whitelisted by {interaction.user}")
+        await interaction.response.send_message(f"✅ {member.mention} has been whitelisted.", ephemeral=False)
+    except discord.Forbidden:
+        await interaction.response.send_message("❌ I don't have permission to give that role.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ An error occurred: {e}", ephemeral=True)
 
 # === KEEPALIVE ===
 app = Flask(__name__)
