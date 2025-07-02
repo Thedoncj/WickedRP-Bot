@@ -375,13 +375,6 @@ async def textunmute(interaction: discord.Interaction, user: discord.Member, rea
         await interaction.followup.send("❌ Failed to unmute user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unmute {user}: {e}")
 
-from discord import app_commands
-import discord
-
-# IDs
-WHITELISTER_ROLE_ID = 1344882926965493823
-WHITELISTED_ROLE_ID = 1127098119750951083
-
 @bot.tree.command(name="wl", description="Whitelist a member by giving them the WhiteListed role")
 @app_commands.describe(member="The member you want to whitelist")
 async def wl(interaction: discord.Interaction, member: discord.Member):
