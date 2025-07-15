@@ -26,7 +26,8 @@ TICKET_CATEGORY_IDS = [
     1130779266880131223,
     1212553215606919188,
     1212553308321874000,
-    1276565387579887616
+    1276565387579887616,
+    1394004814911766770
 ]
 
 MODERATION_ROLES = {
@@ -70,6 +71,52 @@ async def log_to_channel(bot, content):
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
         await log_channel.send(content)
+
+-- Warns Table
+CREATE TABLE warns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    moderator_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Bans Table
+CREATE TABLE bans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    moderator_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    unbanned BOOLEAN DEFAULT 0,
+    unbanned_by TEXT,
+    unban_reason TEXT,
+    unban_timestamp DATETIME
+);
+
+-- Kicks Table
+CREATE TABLE kicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    moderator_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Mutes Table
+CREATE TABLE mutes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    moderator_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    duration INTEGER, -- in seconds; NULL if permanent
+    start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    end_time DATETIME
+);
 
 # === EVENTS ===
 @bot.event
@@ -397,6 +444,101 @@ async def wl(interaction: discord.Interaction, member: discord.Member):
         await interaction.response.send_message("❌ I don't have permission to give that role.", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ An error occurred: {e}", ephemeral=True)
+
+@tree.command(name="unban", description="Unban a user from the server")
+@app_commands.describe(user="The user to unban", reason="The reason for the unban")
+async def unban(interaction: discord.Interaction, user: discord.User, reason: str = "No reason provided"):
+    await interaction.response.defer(ephemeral=True)
+
+    # Check if command user has permission to unban
+    command_member = interaction.guild.get_member(interaction.user.id)
+    if not has_permission(command_member, "unban"):
+        await interaction.followup.send("❌ You do not have permission to unban users.", ephemeral=True)
+        return
+
+    # Check role hierarchy if needed (if unbanning based on database of banned user roles)
+    # Skipped here because banned users are not in the server, but implement if your system tracks ranks
+
+    try:
+        await interaction.guild.unban(user, reason=reason)
+        await interaction.followup.send(f"✅ Successfully unbanned {user}.\n**Reason:** {reason}", ephemeral=True)
+
+        # Logging the unban
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            embed = discord.Embed(
+                title="🔓 Member Unbanned",
+                description=f"**User:** {user.mention} ({user.id})\n**By:** {interaction.user.mention}\n**Reason:** {reason}",
+                color=discord.Color.green()
+            )
+            embed.set_footer(text=f"User ID: {user.id}")
+            embed.timestamp = datetime.datetime.utcnow()
+            await log_channel.send(embed=embed)
+
+    except discord.NotFound:
+        await interaction.followup.send(f"❌ User {user} is not banned.", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send("❌ I do not have permission to unban this user.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send("❌ An error occurred while trying to unban the user.", ephemeral=True)
+        # Log failure
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            embed = discord.Embed(
+                title="⚠️ Unban Failed",
+                description=f"**User:** {user} ({user.id})\n**By:** {interaction.user.mention}\n**Error:** {e}",
+                color=discord.Color.red()
+            )
+            embed.timestamp = datetime.datetime.utcnow()
+            await log_channel.send(embed=embed)
+
+import aiosqlite
+
+@tree.command(name="modhistory", description="View a user's moderation history")
+@app_commands.describe(user="The user to check")
+async def modhistory(interaction: discord.Interaction, user: discord.User):
+    await interaction.response.defer(ephemeral=True)
+    
+    embed = discord.Embed(title=f"Moderation History for {user}", color=discord.Color.blue())
+
+    async with aiosqlite.connect("database.db") as db:
+        # Get warns
+        async with db.execute("SELECT reason, moderator_id, timestamp FROM warns WHERE user_id = ? AND guild_id = ?", (str(user.id), str(interaction.guild.id))) as cursor:
+            warns = await cursor.fetchall()
+            if warns:
+                warn_text = ""
+                for warn in warns:
+                    warn_text += f"• **Reason:** {warn[0]}\n  **Moderator:** <@{warn[1]}>\n  **Date:** {warn[2]}\n"
+                embed.add_field(name=f"⚠️ Warns ({len(warns)})", value=warn_text, inline=False)
+            else:
+                embed.add_field(name="⚠️ Warns", value="No warns.", inline=False)
+
+        # Get bans
+        async with db.execute("SELECT reason, moderator_id, timestamp, unbanned, unban_reason FROM bans WHERE user_id = ? AND guild_id = ?", (str(user.id), str(interaction.guild.id))) as cursor:
+            bans = await cursor.fetchall()
+            if bans:
+                ban_text = ""
+                for ban in bans:
+                    ban_text += f"• **Reason:** {ban[0]}\n  **Moderator:** <@{ban[1]}>\n  **Date:** {ban[2]}\n"
+                    if ban[3]:  # unbanned
+                        ban_text += f"  **Unbanned:** ✅ Reason: {ban[4]}\n"
+                embed.add_field(name=f"🔨 Bans ({len(bans)})", value=ban_text, inline=False)
+            else:
+                embed.add_field(name="🔨 Bans", value="No bans.", inline=False)
+
+        # Get mutes
+        async with db.execute("SELECT reason, moderator_id, start_time, end_time FROM mutes WHERE user_id = ? AND guild_id = ?", (str(user.id), str(interaction.guild.id))) as cursor:
+            mutes = await cursor.fetchall()
+            if mutes:
+                mute_text = ""
+                for mute in mutes:
+                    duration = "Permanent" if mute[3] is None else f"Until {mute[3]}"
+                    mute_text += f"• **Reason:** {mute[0]}\n  **Moderator:** <@{mute[1]}>\n  **Start:** {mute[2]}\n  **End:** {duration}\n"
+                embed.add_field(name=f"🔇 Mutes ({len(mutes)})", value=mute_text, inline=False)
+            else:
+                embed.add_field(name="🔇 Mutes", value="No mutes.", inline=False)
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 # === KEEPALIVE ===
 app = Flask(__name__)
