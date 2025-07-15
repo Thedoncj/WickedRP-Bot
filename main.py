@@ -6,7 +6,8 @@ from flask import Flask
 from discord.ext import commands
 import discord
 from discord import app_commands
-from datetime import timedelta
+from datetime import datetime, timedelta
+import aiosqlite
 
 # === INTENTS & BOT ===
 intents = discord.Intents.default()
@@ -45,7 +46,7 @@ MODERATION_ROLES = {
     "Director": ["all"]
 }
 
-PRIVILEGED_ROLES = ["Head Of Staff", "Trial Manager", "Management", "Head of Management", "Co Director", "Director"]
+PRIVILEGED_ROLES = ["Head Of Staff", "Trial Manager", "Management", "Head Of Management", "Co Director", "Director"]
 STREAMER_ROLE = "Streamer"
 STREAMER_CHANNEL_ID = 1207227502003757077
 ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
@@ -59,71 +60,72 @@ def has_permission(member: discord.Member, command: str) -> bool:
     return False
 
 # === UTILS ===
-def has_permission(member: discord.Member, command_name: str):
-    for role in member.roles:
-        perms = MODERATION_ROLES.get(role.name)
-        if perms:
-            if perms == ["all"] or command_name in perms:
-                return True
-    return False
-
 async def log_to_channel(bot, content):
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
         await log_channel.send(content)
 
--- Warns Table
-CREATE TABLE warns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+def can_act(invoker: discord.Member, target: discord.Member, command: str):
+    return has_permission(invoker, command) and invoker.top_role > target.top_role
 
--- Bans Table
-CREATE TABLE bans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    unbanned BOOLEAN DEFAULT 0,
-    unbanned_by TEXT,
-    unban_reason TEXT,
-    unban_timestamp DATETIME
-);
+# === DATABASE INITIALIZATION ===
+async def initialize_database():
+    async with aiosqlite.connect("database.db") as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS warns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                moderator_id TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS bans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                moderator_id TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                unbanned BOOLEAN DEFAULT 0,
+                unbanned_by TEXT,
+                unban_reason TEXT,
+                unban_timestamp DATETIME
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS kicks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                moderator_id TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS mutes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                moderator_id TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                duration INTEGER, -- seconds; NULL if permanent
+                start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                end_time DATETIME
+            )
+        """)
+        await db.commit()
 
--- Kicks Table
-CREATE TABLE kicks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Mutes Table
-CREATE TABLE mutes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    moderator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    duration INTEGER, -- in seconds; NULL if permanent
-    start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    end_time DATETIME
-);
-
-# === EVENTS ===
 @bot.event
 async def on_ready():
+    await initialize_database()
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
+# === MESSAGE EVENT === (your existing message checks with slur filter, link filter, etc.)
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -144,7 +146,6 @@ async def on_message(message):
             pass
         return
 
-# ✅ Skip link checks if the message is in a ticket category
     if message.channel.category_id in TICKET_CATEGORY_IDS:
         await bot.process_commands(message)
         return
@@ -181,124 +182,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-import asyncio
-from datetime import timedelta
-
-@bot.event
-async def on_guild_role_update(before: discord.Role, after: discord.Role):
-    await asyncio.sleep(2)  # Wait for audit logs to update
-
-    warn_channel = bot.get_channel(WARN_CHANNEL_ID)
-    if not warn_channel:
-        return
-
-    security_role = after.guild.get_role(1389249685805334558)
-
-    entry = None
-    async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.role_update):
-        if log.target.id == before.id:
-            if (discord.utils.utcnow() - log.created_at).total_seconds() < 10:
-                entry = log
-                break
-
-    executor_name = f"{entry.user} ({entry.user.id})" if entry and entry.user else "Unknown"
-    executor_icon = entry.user.display_avatar.url if entry and entry.user else None
-
-    embed = discord.Embed(
-        title="🛠️ Role Updated",
-        description=f"{security_role.mention if security_role else ''}\n**Role:** {after.name}",
-        color=discord.Color.red(),
-        timestamp=entry.created_at if entry else discord.utils.utcnow()
-    )
-
-    changes_detected = False
-
-    # Log name change
-    if before.name != after.name:
-        embed.add_field(name="Name Changed", value=f"`{before.name}` → `{after.name}`", inline=False)
-        changes_detected = True
-
-    # Log permission change
-    if before.permissions != after.permissions:
-        embed.add_field(name="Permissions Changed", value="Permissions were updated.", inline=False)
-        changes_detected = True
-
-    # Removed position change logging as requested
-
-    if changes_detected:
-        if executor_icon:
-            embed.set_author(name=f"Changed by {executor_name}", icon_url=executor_icon)
-        else:
-            embed.set_author(name=f"Changed by {executor_name}")
-
-        embed.set_footer(text=f"Role ID: {after.id}")
-
-        await warn_channel.send(embed=embed)
-    
-@bot.event
-async def on_guild_channel_update(before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
-    if before.category_id in TICKET_CATEGORY_IDS:
-        return
-
-    await asyncio.sleep(3)  # Increased to 3 seconds for reliability
-
-    warn_channel = bot.get_channel(WARN_CHANNEL_ID)
-    if not warn_channel:
-        return
-
-    entry = None
-    async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.channel_update):
-        if log.target.id in [before.id, after.id]:
-            if (discord.utils.utcnow() - log.created_at).total_seconds() < 10:
-                entry = log
-                break
-
-    # Retry logic if no entry found
-    if not entry:
-        await asyncio.sleep(1)
-        async for log in after.guild.audit_logs(limit=10, action=discord.AuditLogAction.channel_update):
-            if log.target.id in [before.id, after.id]:
-                if (discord.utils.utcnow() - log.created_at).total_seconds() < 10:
-                    entry = log
-                    break
-
-    if entry and entry.user:
-        executor_name = f"{entry.user} ({entry.user.id})"
-        executor_icon = entry.user.display_avatar.url
-    elif entry:
-        executor_name = f"User ID: {entry.user_id}"
-        executor_icon = None
-    else:
-        executor_name = "Unknown"
-        executor_icon = None
-
-    timestamp = entry.created_at if entry else discord.utils.utcnow()
-
-    embed = discord.Embed(
-        title="📁 Channel Updated",
-        description=f"**Channel:** {after.mention} (`{after.name}`)",
-        color=discord.Color.gold(),
-        timestamp=timestamp
-    )
-
-    if before.name != after.name:
-        embed.add_field(name="Renamed", value=f"`{before.name}` → `{after.name}`", inline=False)
-    if before.position != after.position:
-        embed.add_field(name="Moved", value=f"Position `{before.position}` → `{after.position}`", inline=False)
-    if before.overwrites != after.overwrites:
-        embed.add_field(name="Permissions Changed", value="Permission overwrites were updated.", inline=False)
-
-    if executor_icon:
-        embed.set_author(name=f"Changed by {executor_name}", icon_url=executor_icon)
-    else:
-        embed.set_author(name=f"Changed by {executor_name}")
-
-    embed.set_footer(text=f"Channel ID: {after.id}")
-    await warn_channel.send(embed=embed)
-
-# Check if invoker has permission and is above target
-def can_act(invoker: discord.Member, target: discord.Member, command: str):
-    return has_permission(invoker, command) and invoker.top_role > target.top_role
+# === COMMANDS ===
 
 @bot.tree.command(name="kick", description="Kick a member")
 @app_commands.describe(user="User to kick", reason="Reason for the kick")
@@ -310,6 +194,11 @@ async def kick(interaction: discord.Interaction, user: discord.Member, reason: s
         await user.kick(reason=reason)
         await interaction.followup.send(f"👢 {user.mention} was kicked. Reason: {reason}")
         await log_to_channel(bot, f"👢 {interaction.user} kicked {user} | Reason: {reason}")
+
+        async with aiosqlite.connect("database.db") as db:
+            await db.execute("INSERT INTO kicks (guild_id, user_id, moderator_id, reason) VALUES (?, ?, ?, ?)",
+                             (str(interaction.guild.id), str(user.id), str(interaction.user.id), reason))
+            await db.commit()
     except Exception as e:
         await interaction.followup.send("❌ Failed to kick user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to kick {user}: {e}")
@@ -324,6 +213,11 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
         await user.ban(reason=reason)
         await interaction.followup.send(f"🔨 {user.mention} was banned. Reason: {reason}")
         await log_to_channel(bot, f"🔨 {interaction.user} banned {user} | Reason: {reason}")
+
+        async with aiosqlite.connect("database.db") as db:
+            await db.execute("INSERT INTO bans (guild_id, user_id, moderator_id, reason, unbanned) VALUES (?, ?, ?, ?, 0)",
+                             (str(interaction.guild.id), str(user.id), str(interaction.user.id), reason))
+            await db.commit()
     except Exception as e:
         await interaction.followup.send("❌ Failed to ban user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to ban {user}: {e}")
@@ -343,6 +237,11 @@ async def gban(interaction: discord.Interaction, user: discord.User, reason: str
                 continue
             try:
                 await guild.ban(member, reason=f"Global Ban: {reason}")
+                # Add to DB per guild
+                async with aiosqlite.connect("database.db") as db:
+                    await db.execute("INSERT INTO bans (guild_id, user_id, moderator_id, reason, unbanned) VALUES (?, ?, ?, ?, 0)",
+                                     (str(guild.id), str(user.id), str(interaction.user.id), f"Global Ban: {reason}"))
+                    await db.commit()
             except:
                 failed.append(guild.name)
     await interaction.followup.send(f"🌐 {user.mention} globally banned. Failed in: {', '.join(failed) if failed else 'None'}")
@@ -354,8 +253,17 @@ async def warn(interaction: discord.Interaction, user: discord.Member, reason: s
     await interaction.response.defer(thinking=True)
     if not can_act(interaction.user, user, "warn"):
         return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
-    await interaction.followup.send(f"⚠️ {user.mention} warned. Reason: {reason}")
-    await log_to_channel(bot, f"⚠️ {interaction.user} warned {user} | Reason: {reason}")
+    try:
+        await interaction.followup.send(f"⚠️ {user.mention} warned. Reason: {reason}")
+        await log_to_channel(bot, f"⚠️ {interaction.user} warned {user} | Reason: {reason}")
+
+        async with aiosqlite.connect("database.db") as db:
+            await db.execute("INSERT INTO warns (guild_id, user_id, moderator_id, reason) VALUES (?, ?, ?, ?)",
+                             (str(interaction.guild.id), str(user.id), str(interaction.user.id), reason))
+            await db.commit()
+    except Exception as e:
+        await interaction.followup.send("❌ Failed to warn user.", ephemeral=True)
+        await log_to_channel(bot, f"❌ {interaction.user} failed to warn {user}: {e}")
 
 @bot.tree.command(name="giverole", description="Give a role to a member")
 @app_commands.describe(user="User to give role to", role="Role to assign", reason="Reason for giving role")
@@ -398,9 +306,24 @@ async def textmute(interaction: discord.Interaction, user: discord.Member, durat
         await user.add_roles(mute_role, reason=reason)
         await interaction.followup.send(f"🔇 {user.mention} muted for {duration} minutes. Reason: {reason}")
         await log_to_channel(bot, f"🔇 {interaction.user} muted {user} for {duration} minutes | Reason: {reason}")
+
+        now = datetime.utcnow()
+        end_time = now + timedelta(minutes=duration)
+
+        async with aiosqlite.connect("database.db") as db:
+            await db.execute("""
+                INSERT INTO mutes (guild_id, user_id, moderator_id, reason, duration, start_time, end_time) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (str(interaction.guild.id), str(user.id), str(interaction.user.id), reason, duration*60, now.isoformat(), end_time.isoformat()))
+            await db.commit()
+
+        # Wait for duration then unmute
         await asyncio.sleep(duration * 60)
-        await user.remove_roles(mute_role, reason="Mute duration expired")
-        await log_to_channel(bot, f"🔊 {user.mention} was automatically unmuted after {duration} minutes.")
+
+        # Before unmuting, check if user still has mute role (in case unmuted early)
+        if mute_role in user.roles:
+            await user.remove_roles(mute_role, reason="Mute duration expired")
+            await log_to_channel(bot, f"🔊 {user.mention} was automatically unmuted after {duration} minutes.")
     except Exception as e:
         await interaction.followup.send("❌ Failed to mute user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to mute {user}: {e}")
@@ -416,138 +339,136 @@ async def textunmute(interaction: discord.Interaction, user: discord.Member, rea
         return await interaction.followup.send("❌ 'Muted' role not found.", ephemeral=True)
     try:
         await user.remove_roles(mute_role, reason=reason)
-        await interaction.followup.send(f"🔊 {user.mention} was unmuted. Reason: {reason}")
+        await interaction.followup.send(f"🔊 {user.mention} has been unmuted. Reason: {reason}")
         await log_to_channel(bot, f"🔊 {interaction.user} unmuted {user} | Reason: {reason}")
+
+        # Update mute DB to mark end_time as now
+        now = datetime.utcnow()
+        async with aiosqlite.connect("database.db") as db:
+            await db.execute("""
+                UPDATE mutes 
+                SET end_time = ?, duration = 0 
+                WHERE guild_id = ? AND user_id = ? AND end_time > ?
+            """, (now.isoformat(), str(interaction.guild.id), str(user.id), now.isoformat()))
+            await db.commit()
+
     except Exception as e:
         await interaction.followup.send("❌ Failed to unmute user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unmute {user}: {e}")
 
-@bot.tree.command(name="wl", description="Whitelist a member by giving them the WhiteListed role")
-@app_commands.describe(member="The member you want to whitelist")
-async def wl(interaction: discord.Interaction, member: discord.Member):
-    # Check if the user has the Whitelister role
-    if WHITELISTER_ROLE_ID not in [role.id for role in interaction.user.roles]:
-        await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
-        return
+@bot.tree.command(name="wl", description="Whitelist a member by giving them the Whitelisted role")
+@app_commands.describe(user="User to whitelist")
+async def wl(interaction: discord.Interaction, user: discord.Member):
+    await interaction.response.defer(thinking=True)
+    author = interaction.user
+    if WHITELISTER_ROLE_ID not in [r.id for r in author.roles]:
+        return await interaction.followup.send("❌ You do not have permission to whitelist users.", ephemeral=True)
 
-    # Get the WhiteListed role
-    role = interaction.guild.get_role(WHITELISTED_ROLE_ID)
-    if not role:
-        await interaction.response.send_message("❌ The WhiteListed role does not exist.", ephemeral=True)
-        return
-
-    # Give the role to the selected member
+    whitelisted_role = interaction.guild.get_role(WHITELISTED_ROLE_ID)
+    if not whitelisted_role:
+        return await interaction.followup.send("❌ Whitelisted role not found.", ephemeral=True)
+    if whitelisted_role in user.roles:
+        return await interaction.followup.send(f"ℹ️ {user.mention} is already whitelisted.", ephemeral=True)
     try:
-        await member.add_roles(role, reason=f"Whitelisted by {interaction.user}")
-        await interaction.response.send_message(f"✅ {member.mention} has been whitelisted.", ephemeral=False)
-    except discord.Forbidden:
-        await interaction.response.send_message("❌ I don't have permission to give that role.", ephemeral=True)
+        await user.add_roles(whitelisted_role, reason=f"Whitelisted by {author}")
+        await interaction.followup.send(f"✅ {user.mention} has been whitelisted.")
+        await log_to_channel(bot, f"✅ {author} whitelisted {user}")
     except Exception as e:
-        await interaction.response.send_message(f"❌ An error occurred: {e}", ephemeral=True)
+        await interaction.followup.send("❌ Failed to whitelist user.", ephemeral=True)
+        await log_to_channel(bot, f"❌ {author} failed to whitelist {user}: {e}")
 
-@tree.command(name="unban", description="Unban a user from the server")
-@app_commands.describe(user="The user to unban", reason="The reason for the unban")
-async def unban(interaction: discord.Interaction, user: discord.User, reason: str = "No reason provided"):
-    await interaction.response.defer(ephemeral=True)
-
-    # Check if command user has permission to unban
-    command_member = interaction.guild.get_member(interaction.user.id)
-    if not has_permission(command_member, "unban"):
-        await interaction.followup.send("❌ You do not have permission to unban users.", ephemeral=True)
-        return
-
-    # Check role hierarchy if needed (if unbanning based on database of banned user roles)
-    # Skipped here because banned users are not in the server, but implement if your system tracks ranks
-
-    try:
-        await interaction.guild.unban(user, reason=reason)
-        await interaction.followup.send(f"✅ Successfully unbanned {user}.\n**Reason:** {reason}", ephemeral=True)
-
-        # Logging the unban
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            embed = discord.Embed(
-                title="🔓 Member Unbanned",
-                description=f"**User:** {user.mention} ({user.id})\n**By:** {interaction.user.mention}\n**Reason:** {reason}",
-                color=discord.Color.green()
-            )
-            embed.set_footer(text=f"User ID: {user.id}")
-            embed.timestamp = datetime.datetime.utcnow()
-            await log_channel.send(embed=embed)
-
-    except discord.NotFound:
-        await interaction.followup.send(f"❌ User {user} is not banned.", ephemeral=True)
-    except discord.Forbidden:
-        await interaction.followup.send("❌ I do not have permission to unban this user.", ephemeral=True)
-    except Exception as e:
-        await interaction.followup.send("❌ An error occurred while trying to unban the user.", ephemeral=True)
-        # Log failure
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            embed = discord.Embed(
-                title="⚠️ Unban Failed",
-                description=f"**User:** {user} ({user.id})\n**By:** {interaction.user.mention}\n**Error:** {e}",
-                color=discord.Color.red()
-            )
-            embed.timestamp = datetime.datetime.utcnow()
-            await log_channel.send(embed=embed)
-
-import aiosqlite
-
-@tree.command(name="modhistory", description="View a user's moderation history")
-@app_commands.describe(user="The user to check")
+@bot.tree.command(name="modhistory", description="Show moderation history for a user")
+@app_commands.describe(user="User to show history for")
 async def modhistory(interaction: discord.Interaction, user: discord.User):
-    await interaction.response.defer(ephemeral=True)
-    
-    embed = discord.Embed(title=f"Moderation History for {user}", color=discord.Color.blue())
+    await interaction.response.defer(thinking=True)
+    guild_id = str(interaction.guild.id)
 
     async with aiosqlite.connect("database.db") as db:
-        # Get warns
-        async with db.execute("SELECT reason, moderator_id, timestamp FROM warns WHERE user_id = ? AND guild_id = ?", (str(user.id), str(interaction.guild.id))) as cursor:
-            warns = await cursor.fetchall()
-            if warns:
-                warn_text = ""
-                for warn in warns:
-                    warn_text += f"• **Reason:** {warn[0]}\n  **Moderator:** <@{warn[1]}>\n  **Date:** {warn[2]}\n"
-                embed.add_field(name=f"⚠️ Warns ({len(warns)})", value=warn_text, inline=False)
-            else:
-                embed.add_field(name="⚠️ Warns", value="No warns.", inline=False)
+        # Fetch warns
+        warns = await db.execute_fetchall("SELECT moderator_id, reason, timestamp FROM warns WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+        # Fetch bans
+        bans = await db.execute_fetchall("SELECT moderator_id, reason, timestamp, unbanned FROM bans WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+        # Fetch kicks
+        kicks = await db.execute_fetchall("SELECT moderator_id, reason, timestamp FROM kicks WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+        # Fetch mutes
+        mutes = await db.execute_fetchall("SELECT moderator_id, reason, start_time, end_time FROM mutes WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
 
-        # Get bans
-        async with db.execute("SELECT reason, moderator_id, timestamp, unbanned, unban_reason FROM bans WHERE user_id = ? AND guild_id = ?", (str(user.id), str(interaction.guild.id))) as cursor:
-            bans = await cursor.fetchall()
-            if bans:
-                ban_text = ""
-                for ban in bans:
-                    ban_text += f"• **Reason:** {ban[0]}\n  **Moderator:** <@{ban[1]}>\n  **Date:** {ban[2]}\n"
-                    if ban[3]:  # unbanned
-                        ban_text += f"  **Unbanned:** ✅ Reason: {ban[4]}\n"
-                embed.add_field(name=f"🔨 Bans ({len(bans)})", value=ban_text, inline=False)
-            else:
-                embed.add_field(name="🔨 Bans", value="No bans.", inline=False)
+    embed = discord.Embed(title=f"Mod History for {user}", color=discord.Color.blue())
+    if warns:
+        warn_lines = []
+        for mod_id, reason, ts in warns:
+            mod = interaction.guild.get_member(int(mod_id))
+            mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
+            warn_lines.append(f"⚠️ Warn by {mod_name} at {ts}: {reason}")
+        embed.add_field(name="Warns", value="\n".join(warn_lines), inline=False)
+    else:
+        embed.add_field(name="Warns", value="None", inline=False)
 
-        # Get mutes
-        async with db.execute("SELECT reason, moderator_id, start_time, end_time FROM mutes WHERE user_id = ? AND guild_id = ?", (str(user.id), str(interaction.guild.id))) as cursor:
-            mutes = await cursor.fetchall()
-            if mutes:
-                mute_text = ""
-                for mute in mutes:
-                    duration = "Permanent" if mute[3] is None else f"Until {mute[3]}"
-                    mute_text += f"• **Reason:** {mute[0]}\n  **Moderator:** <@{mute[1]}>\n  **Start:** {mute[2]}\n  **End:** {duration}\n"
-                embed.add_field(name=f"🔇 Mutes ({len(mutes)})", value=mute_text, inline=False)
-            else:
-                embed.add_field(name="🔇 Mutes", value="No mutes.", inline=False)
+    if bans:
+        ban_lines = []
+        for mod_id, reason, ts, unbanned in bans:
+            mod = interaction.guild.get_member(int(mod_id))
+            mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
+            status = "Unbanned" if unbanned else "Banned"
+            ban_lines.append(f"🔨 {status} by {mod_name} at {ts}: {reason}")
+        embed.add_field(name="Bans", value="\n".join(ban_lines), inline=False)
+    else:
+        embed.add_field(name="Bans", value="None", inline=False)
 
-    await interaction.followup.send(embed=embed, ephemeral=True)
+    if kicks:
+        kick_lines = []
+        for mod_id, reason, ts in kicks:
+            mod = interaction.guild.get_member(int(mod_id))
+            mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
+            kick_lines.append(f"👢 Kick by {mod_name} at {ts}: {reason}")
+        embed.add_field(name="Kicks", value="\n".join(kick_lines), inline=False)
+    else:
+        embed.add_field(name="Kicks", value="None", inline=False)
 
-# === KEEPALIVE ===
-app = Flask(__name__)
-@app.route('/')
-def home():
-    return "Bot is running!", 200
-threading.Thread(target=lambda: app.run(host="0.0.0.0", port=8080)).start()
+    if mutes:
+        mute_lines = []
+        for mod_id, reason, start, end in mutes:
+            mod = interaction.guild.get_member(int(mod_id))
+            mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
+            mute_lines.append(f"🔇 Mute by {mod_name} from {start} to {end}: {reason}")
+        embed.add_field(name="Mutes", value="\n".join(mute_lines), inline=False)
+    else:
+        embed.add_field(name="Mutes", value="None", inline=False)
 
-# === RUN ===
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
-# === RUN ===
+    await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="unban", description="Unban a user by their ID")
+@app_commands.describe(user_id="User ID to unban", reason="Reason for unbanning")
+async def unban(interaction: discord.Interaction, user_id: str, reason: str):
+    await interaction.response.defer(thinking=True)
+    if not has_permission(interaction.user, "unban"):
+        return await interaction.followup.send("❌ You lack permission.", ephemeral=True)
+    try:
+        banned_users = await interaction.guild.bans()
+        user = None
+        for ban_entry in banned_users:
+            if str(ban_entry.user.id) == user_id:
+                user = ban_entry.user
+                break
+        if not user:
+            return await interaction.followup.send("❌ User is not banned.", ephemeral=True)
+
+        await interaction.guild.unban(user, reason=reason)
+        await interaction.followup.send(f"✅ Unbanned user ID {user_id}. Reason: {reason}")
+        await log_to_channel(bot, f"✅ {interaction.user} unbanned {user} | Reason: {reason}")
+
+        now = datetime.utcnow()
+        async with aiosqlite.connect("database.db") as db:
+            await db.execute("""
+                UPDATE bans
+                SET unbanned = 1, unbanned_by = ?, unban_reason = ?, unban_timestamp = ?
+                WHERE guild_id = ? AND user_id = ? AND unbanned = 0
+            """, (str(interaction.user.id), reason, now.isoformat(), str(interaction.guild.id), user_id))
+            await db.commit()
+
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
+        await log_to_channel(bot, f"❌ {interaction.user} failed to unban user ID {user_id}: {e}")
+
+# === RUN BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
