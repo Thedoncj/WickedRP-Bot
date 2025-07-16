@@ -383,59 +383,76 @@ async def modhistory(interaction: discord.Interaction, user: discord.User):
     await interaction.response.defer(thinking=True)
     guild_id = str(interaction.guild.id)
 
-    async with aiosqlite.connect("database.db") as db:
-        # Fetch warns
-        warns = await db.execute_fetchall("SELECT moderator_id, reason, timestamp FROM warns WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
-        # Fetch bans
-        bans = await db.execute_fetchall("SELECT moderator_id, reason, timestamp, unbanned FROM bans WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
-        # Fetch kicks
-        kicks = await db.execute_fetchall("SELECT moderator_id, reason, timestamp FROM kicks WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
-        # Fetch mutes
-        mutes = await db.execute_fetchall("SELECT moderator_id, reason, start_time, end_time FROM mutes WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+    try:
+        async with aiosqlite.connect("database.db") as db:
+            # Fetch warns
+            warns = await db.execute_fetchall("SELECT moderator_id, reason, timestamp FROM warns WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+            # Fetch bans
+            bans = await db.execute_fetchall("SELECT moderator_id, reason, timestamp, unbanned FROM bans WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+            # Fetch kicks
+            kicks = await db.execute_fetchall("SELECT moderator_id, reason, timestamp FROM kicks WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+            # Fetch mutes
+            mutes = await db.execute_fetchall("SELECT moderator_id, reason, start_time, end_time FROM mutes WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+        
+        embed = discord.Embed(title=f"Mod History for {user}", color=discord.Color.blue())
 
-    embed = discord.Embed(title=f"Mod History for {user}", color=discord.Color.blue())
-    if warns:
-        warn_lines = []
-        for mod_id, reason, ts in warns:
-            mod = interaction.guild.get_member(int(mod_id))
-            mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
-            warn_lines.append(f"⚠️ Warn by {mod_name} at {ts}: {reason}")
-        embed.add_field(name="Warns", value="\n".join(warn_lines), inline=False)
-    else:
-        embed.add_field(name="Warns", value="None", inline=False)
+        if warns:
+            warn_lines = []
+            for mod_id, reason, ts in warns:
+                try:
+                    mod = interaction.guild.get_member(int(mod_id))
+                    mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
+                except Exception as e:
+                    mod_name = f"Invalid Mod ID: {mod_id}"
+                warn_lines.append(f"⚠️ Warn by {mod_name} at {ts}: {reason}")
+            embed.add_field(name="Warns", value="\n".join(warn_lines), inline=False)
+        else:
+            embed.add_field(name="Warns", value="None", inline=False)
 
-    if bans:
-        ban_lines = []
-        for mod_id, reason, ts, unbanned in bans:
-            mod = interaction.guild.get_member(int(mod_id))
-            mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
-            status = "Unbanned" if unbanned else "Banned"
-            ban_lines.append(f"🔨 {status} by {mod_name} at {ts}: {reason}")
-        embed.add_field(name="Bans", value="\n".join(ban_lines), inline=False)
-    else:
-        embed.add_field(name="Bans", value="None", inline=False)
+        if bans:
+            ban_lines = []
+            for mod_id, reason, ts, unbanned in bans:
+                try:
+                    mod = interaction.guild.get_member(int(mod_id))
+                    mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
+                except Exception as e:
+                    mod_name = f"Invalid Mod ID: {mod_id}"
+                status = "Unbanned" if unbanned else "Banned"
+                ban_lines.append(f"🔨 {status} by {mod_name} at {ts}: {reason}")
+            embed.add_field(name="Bans", value="\n".join(ban_lines), inline=False)
+        else:
+            embed.add_field(name="Bans", value="None", inline=False)
 
-    if kicks:
-        kick_lines = []
-        for mod_id, reason, ts in kicks:
-            mod = interaction.guild.get_member(int(mod_id))
-            mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
-            kick_lines.append(f"👢 Kick by {mod_name} at {ts}: {reason}")
-        embed.add_field(name="Kicks", value="\n".join(kick_lines), inline=False)
-    else:
-        embed.add_field(name="Kicks", value="None", inline=False)
+        if kicks:
+            kick_lines = []
+            for mod_id, reason, ts in kicks:
+                try:
+                    mod = interaction.guild.get_member(int(mod_id))
+                    mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
+                except Exception as e:
+                    mod_name = f"Invalid Mod ID: {mod_id}"
+                kick_lines.append(f"👢 Kick by {mod_name} at {ts}: {reason}")
+            embed.add_field(name="Kicks", value="\n".join(kick_lines), inline=False)
+        else:
+            embed.add_field(name="Kicks", value="None", inline=False)
 
-    if mutes:
-        mute_lines = []
-        for mod_id, reason, start, end in mutes:
-            mod = interaction.guild.get_member(int(mod_id))
-            mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
-            mute_lines.append(f"🔇 Mute by {mod_name} from {start} to {end}: {reason}")
-        embed.add_field(name="Mutes", value="\n".join(mute_lines), inline=False)
-    else:
-        embed.add_field(name="Mutes", value="None", inline=False)
+        if mutes:
+            mute_lines = []
+            for mod_id, reason, start, end in mutes:
+                try:
+                    mod = interaction.guild.get_member(int(mod_id))
+                    mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
+                except Exception as e:
+                    mod_name = f"Invalid Mod ID: {mod_id}"
+                mute_lines.append(f"🔇 Mute by {mod_name} from {start} to {end}: {reason}")
+            embed.add_field(name="Mutes", value="\n".join(mute_lines), inline=False)
+        else:
+            embed.add_field(name="Mutes", value="None", inline=False)
 
-    await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error fetching mod history: `{e}`")
 
 @bot.tree.command(name="unban", description="Unban a user by their ID")
 @app_commands.describe(user_id="User ID to unban", reason="Reason for unbanning")
