@@ -458,30 +458,42 @@ async def modhistory(interaction: discord.Interaction, user: discord.User):
 @app_commands.describe(user_id="User ID to unban", reason="Reason for unbanning")
 async def unban(interaction: discord.Interaction, user_id: str, reason: str):
     await interaction.response.defer(thinking=True)
+
     if not has_permission(interaction.user, "unban"):
         return await interaction.followup.send("❌ You lack permission.", ephemeral=True)
+
     try:
-        banned_users = await interaction.guild.bans()
-        user = None
-        for ban_entry in banned_users:
-            if str(ban_entry.user.id) == user_id:
-                user = ban_entry.user
-                break
+        # Collect all banned users into a list
+        banned_users = [entry async for entry in interaction.guild.bans()]
+        user = next((ban.user for ban in banned_users if str(ban.user.id) == user_id), None)
+
         if not user:
             return await interaction.followup.send("❌ User is not banned.", ephemeral=True)
 
+        # Unban the user
         await interaction.guild.unban(user, reason=reason)
+
+        # Send success message
         await interaction.followup.send(f"✅ Unbanned user ID {user_id}. Reason: {reason}")
         await log_to_channel(bot, f"✅ {interaction.user} unbanned {user} | Reason: {reason}")
 
+        # Update database
         now = datetime.utcnow()
         async with aiosqlite.connect("database.db") as db:
             await db.execute("""
                 UPDATE bans
                 SET unbanned = 1, unbanned_by = ?, unban_reason = ?, unban_timestamp = ?
                 WHERE guild_id = ? AND user_id = ? AND unbanned = 0
-            """, (str(interaction.user.id), reason, now.isoformat(), str(interaction.guild.id), user_id))
+            """, (str(interaction.user.id), reason, now.isoformat(),
+                  str(interaction.guild.id), user_id))
             await db.commit()
+
+    except discord.NotFound:
+        await interaction.followup.send("❌ User not found or already unbanned.", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send("❌ I don't have permission to unban this user.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
 
     except Exception as e:
         await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
