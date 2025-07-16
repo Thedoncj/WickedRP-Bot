@@ -182,6 +182,44 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_type: str, reason: str):
+    """Save moderation actions to DB."""
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect("database.db") as db:
+        await db.execute("""
+            INSERT INTO mod_history (guild_id, user_id, moderator_id, action_type, reason, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (str(guild_id), str(user_id), str(moderator_id), action_type, reason, now))
+        await db.commit()
+
+async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_type: str, reason: str):
+    """Save moderation actions to DB."""
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect("database.db") as db:
+        await db.execute("""
+            INSERT INTO mod_history (guild_id, user_id, moderator_id, action_type, reason, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (str(guild_id), str(user_id), str(moderator_id), action_type, reason, now))
+        await db.commit()
+
+@bot.event
+async def on_member_ban(guild, user):
+    # Get audit log to find who banned them and why
+    entry = await guild.audit_logs(limit=1, action=discord.AuditLogAction.ban).flatten()
+    if entry:
+        mod = entry[0].user
+        reason = entry[0].reason or "No reason provided"
+        await log_mod_action(guild.id, user.id, mod.id, "ban", reason)
+
+@bot.event
+async def on_member_remove(member):
+    # Check if it was a kick
+    async for entry in member.guild.audit_logs(limit=1, action=discord.AuditLogAction.kick):
+        if entry.target.id == member.id:
+            reason = entry.reason or "No reason provided"
+            await log_mod_action(member.guild.id, member.id, entry.user.id, "kick", reason)
+            break
+
 # === COMMANDS ===
 
 @bot.tree.command(name="kick", description="Kick a member")
