@@ -523,5 +523,8 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str):
         await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unban user ID {user_id}: {e}")
 
+from keep_alive import keep_alive
+keep_alive()
+
 # === RUN BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
