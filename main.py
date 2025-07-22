@@ -59,6 +59,22 @@ def has_permission(member: discord.Member, command: str) -> bool:
                 return True
     return False
 
+    # === Department Wide Announcement Auto Relay ===
+    DEPARTMENT_COORDINATOR_ROLE_ID = 1397298657568624762
+    DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID = 1394004814911766770
+
+    # Check if author has Department Coordinator role
+    if DEPARTMENT_COORDINATOR_ROLE_ID in [role.id for role in message.author.roles]:
+        announcement_channel = message.guild.get_channel(DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID)
+        if announcement_channel:
+            embed = discord.Embed(
+                title="𝐃𝐞𝐩𝐚𝐫𝐭𝐦𝐞𝐧𝐭 𝐖𝐢𝐝𝐞 𝐀𝐧𝐧𝐨𝐮𝐧𝐜𝐞𝐦𝐞𝐧𝐭",
+                description=message.content,
+                color=discord.Color.gold()
+            )
+            embed.set_footer(text=f"Sent by {message.author.display_name}", icon_url=message.author.avatar.url if message.author.avatar else None)
+            await announcement_channel.send(embed=embed)
+
 # === UTILS ===
 async def log_to_channel(bot, content):
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
