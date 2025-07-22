@@ -192,16 +192,6 @@ async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_
         """, (str(guild_id), str(user_id), str(moderator_id), action_type, reason, now))
         await db.commit()
 
-async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_type: str, reason: str):
-    """Save moderation actions to DB."""
-    now = datetime.utcnow().isoformat()
-    async with aiosqlite.connect("database.db") as db:
-        await db.execute("""
-            INSERT INTO mod_history (guild_id, user_id, moderator_id, action_type, reason, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (str(guild_id), str(user_id), str(moderator_id), action_type, reason, now))
-        await db.commit()
-
 @bot.event
 async def on_member_ban(guild, user):
     # Get audit log to find who banned them and why
@@ -529,9 +519,6 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str):
         await interaction.followup.send("❌ User not found or already unbanned.", ephemeral=True)
     except discord.Forbidden:
         await interaction.followup.send("❌ I don't have permission to unban this user.", ephemeral=True)
-    except Exception as e:
-        await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
-
     except Exception as e:
         await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unban user ID {user_id}: {e}")
