@@ -533,6 +533,14 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str):
     except Exception as e:
         await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unban user ID {user_id}: {e}")
+import asyncio
+
+# Example throttled message deletion
+await asyncio.sleep(1)  # Sleep before or after each request to slow things down
+try:
+    await message.delete()
+except discord.NotFound:
+    pass
 
 from keep_alive import keep_alive
 keep_alive()
