@@ -20,8 +20,6 @@ LOG_CHANNEL_ID = 1384882351678689431
 WARN_CHANNEL_ID = 1384717083652264056
 WHITELISTER_ROLE_ID = 1344882926965493823
 WHITELISTED_ROLE_ID = 1127098119750951083
-DEPARTMENT_COORDINATOR_ROLE_ID = 1397298657568624762
-DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID = 1394004814911766770
 
 TICKET_CATEGORY_IDS = [
     1282992099876274187,
@@ -127,12 +125,12 @@ async def on_ready():
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
+# === MESSAGE EVENT === (your existing message checks with slur filter, link filter, etc.)
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # === SLUR FILTERING ===
     slurs = ["spick", "nigger", "retarded"]
     content = message.content.lower()
     if any(slur in content for slur in slurs):
@@ -148,15 +146,16 @@ async def on_message(message):
             pass
         return
 
-    # === LINK FILTERING ===
+    if message.channel.category_id in TICKET_CATEGORY_IDS:
+        await bot.process_commands(message)
+        return
+    
     link_pattern = re.compile(r"https?://[^\s]+")
     links = link_pattern.findall(message.content)
 
     if links:
         has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
         is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
-        is_department_coordinator = any(role.id == DEPARTMENT_COORDINATOR_ROLE_ID for role in message.author.roles)
-        in_department_announcement_channel = message.channel.id == DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID
 
         for link in links:
             if "discord.gg" in link or "discord.com/invite" in link:
@@ -175,21 +174,12 @@ async def on_message(message):
             ):
                 continue
 
-            if is_department_coordinator and in_department_announcement_channel:
-                continue
-
             if not has_privilege:
                 await message.delete()
                 await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
                 await log_to_channel(bot, f"🚫 Deleted unauthorized link from {message.author} in #{message.channel}: `{link}`")
                 return
 
-    # === TICKET CHANNEL COMMANDS ALLOWED ===
-    if message.channel.category_id in TICKET_CATEGORY_IDS:
-        await bot.process_commands(message)
-        return
-
-    # === DEFAULT COMMAND HANDLER ===
     await bot.process_commands(message)
 
 async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_type: str, reason: str):
@@ -202,7 +192,17 @@ async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_
         """, (str(guild_id), str(user_id), str(moderator_id), action_type, reason, now))
         await db.commit()
 
-c
+async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_type: str, reason: str):
+    """Save moderation actions to DB."""
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect("database.db") as db:
+        await db.execute("""
+            INSERT INTO mod_history (guild_id, user_id, moderator_id, action_type, reason, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (str(guild_id), str(user_id), str(moderator_id), action_type, reason, now))
+        await db.commit()
+
+@bot.event
 async def on_member_ban(guild, user):
     # Get audit log to find who banned them and why
     entry = await guild.audit_logs(limit=1, action=discord.AuditLogAction.ban).flatten()
@@ -531,18 +531,10 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str):
         await interaction.followup.send("❌ I don't have permission to unban this user.", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
+
+    except Exception as e:
+        await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unban user ID {user_id}: {e}")
-import asyncio
-
-@bot.event
-await asyncio.sleep(1)  # Sleep before or after each request to slow things down
-try:
-    await message.delete()
-except discord.NotFound:
-    pass
-
-from keep_alive import keep_alive
-keep_alive()
 
 # === RUN BOT ===
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
