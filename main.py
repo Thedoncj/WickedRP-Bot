@@ -203,7 +203,7 @@ async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_
         """, (str(guild_id), str(user_id), str(moderator_id), action_type, reason, now))
         await db.commit()
 
-@bot.event
+c
 async def on_member_ban(guild, user):
     # Get audit log to find who banned them and why
     entry = await guild.audit_logs(limit=1, action=discord.AuditLogAction.ban).flatten()
@@ -535,7 +535,7 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str):
         await log_to_channel(bot, f"❌ {interaction.user} failed to unban user ID {user_id}: {e}")
 import asyncio
 
-# Example throttled message deletion
+@bot.event
 await asyncio.sleep(1)  # Sleep before or after each request to slow things down
 try:
     await message.delete()
