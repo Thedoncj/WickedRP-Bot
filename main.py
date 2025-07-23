@@ -31,6 +31,9 @@ TICKET_CATEGORY_IDS = [
     1394004814911766770
 ]
 
+ DEPARTMENT_COORDINATOR_ROLE_ID = 1397298657568624762
+    DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID = 1394004814911766770
+
 MODERATION_ROLES = {
     "Trial Moderator": ["kick", "textmute", "warn"],
     "Moderator": ["kick", "textmute", "warn"],
@@ -58,22 +61,6 @@ def has_permission(member: discord.Member, command: str) -> bool:
             if "all" in perms or command in perms:
                 return True
     return False
-
-    # === Department Wide Announcement Auto Relay ===
-    DEPARTMENT_COORDINATOR_ROLE_ID = 1397298657568624762
-    DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID = 1394004814911766770
-
-    # Check if author has Department Coordinator role
-    if DEPARTMENT_COORDINATOR_ROLE_ID in [role.id for role in message.author.roles]:
-        announcement_channel = message.guild.get_channel(DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID)
-        if announcement_channel:
-            embed = discord.Embed(
-                title="𝐃𝐞𝐩𝐚𝐫𝐭𝐦𝐞𝐧𝐭 𝐖𝐢𝐝𝐞 𝐀𝐧𝐧𝐨𝐮𝐧𝐜𝐞𝐦𝐞𝐧𝐭",
-                description=message.content,
-                color=discord.Color.gold()
-            )
-            embed.set_footer(text=f"Sent by {message.author.display_name}", icon_url=message.author.avatar.url if message.author.avatar else None)
-            await announcement_channel.send(embed=embed)
 
 # === UTILS ===
 async def log_to_channel(bot, content):
@@ -166,37 +153,50 @@ async def on_message(message):
         await bot.process_commands(message)
         return
     
-    link_pattern = re.compile(r"https?://[^\s]+")
-    links = link_pattern.findall(message.content)
+   # === INSIDE YOUR on_message EVENT ===
+link_pattern = re.compile(r"https?://[^\s]+")
+links = link_pattern.findall(message.content)
 
-    if links:
-        has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
-        is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
+if links:
+    has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
+    is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
 
-        for link in links:
-            if "discord.gg" in link or "discord.com/invite" in link:
-                await message.delete()
-                await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
-                await log_to_channel(bot, f"🚫 Deleted Discord invite from {message.author} in #{message.channel}: `{link}`")
-                return
+    # ✅ NEW: Check if user is a Department Coordinator
+    is_department_coordinator = any(role.id == DEPARTMENT_COORDINATOR_ROLE_ID for role in message.author.roles)
+    in_department_announcement_channel = message.channel.id == DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID
 
-            if any(domain in link for domain in ["tenor.com", "giphy.com"]):
-                continue
+    for link in links:
+        # ❌ Block Discord invites regardless of role/channel
+        if "discord.gg" in link or "discord.com/invite" in link:
+            await message.delete()
+            await message.channel.send(f"🚫 {message.author.mention}, Discord invites are not allowed.")
+            await log_to_channel(bot, f"🚫 Deleted Discord invite from {message.author} in #{message.channel}: `{link}`")
+            return
 
-            if (
-                message.channel.id == STREAMER_CHANNEL_ID and
-                is_streamer and
-                any(domain in link for domain in ALLOWED_STREAMER_DOMAINS)
-            ):
-                continue
+        # ✅ Allow gifs from specific domains
+        if any(domain in link for domain in ["tenor.com", "giphy.com"]):
+            continue
 
-            if not has_privilege:
-                await message.delete()
-                await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
-                await log_to_channel(bot, f"🚫 Deleted unauthorized link from {message.author} in #{message.channel}: `{link}`")
-                return
+        # ✅ Allow streamers in streamer channel
+        if (
+            message.channel.id == STREAMER_CHANNEL_ID and
+            is_streamer and
+            any(domain in link for domain in ALLOWED_STREAMER_DOMAINS)
+        ):
+            continue
 
-    await bot.process_commands(message)
+        # ✅ NEW: Allow Department Coordinators in their announcement channel
+        if is_department_coordinator and in_department_announcement_channel:
+            continue
+
+        # ❌ Block if not privileged
+        if not has_privilege:
+            await message.delete()
+            await message.channel.send(f"🚫 {message.author.mention}, you are not allowed to post this kind of link.")
+            await log_to_channel(bot, f"🚫 Deleted unauthorized link from {message.author} in #{message.channel}: `{link}`")
+            return
+
+await bot.process_commands(message)
 
 async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_type: str, reason: str):
     """Save moderation actions to DB."""
