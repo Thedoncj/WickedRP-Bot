@@ -356,6 +356,7 @@ async def textmute(interaction: discord.Interaction, user: discord.Member, durat
             await db.commit()
 
         # Wait for duration then unmute
+   try:
     some_code_here()
 except Exception as e:
     print(e)
