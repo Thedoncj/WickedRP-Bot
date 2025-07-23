@@ -357,7 +357,7 @@ async def textmute(interaction: discord.Interaction, user: discord.Member, durat
 
         # Wait for duration then unmute
         async def some_function():
-    await asyncio.sleep(1)
+    await asyncio.sleep(1)  # ✅ Indented correctly
 
         # Before unmuting, check if user still has mute role (in case unmuted early)
         if mute_role in user.roles:
