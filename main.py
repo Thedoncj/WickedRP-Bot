@@ -151,8 +151,8 @@ async def on_message(message):
     if message.channel.category_id in TICKET_CATEGORY_IDS:
         await bot.process_commands(message)
         return
-    
-  @bot.event
+
+@bot.event
 async def on_message(message):
     # === LINK FILTERING LOGIC ===
     link_pattern = re.compile(r"https?://[^\s]+")
