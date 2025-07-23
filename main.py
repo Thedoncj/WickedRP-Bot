@@ -127,12 +127,12 @@ async def on_ready():
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
-# === MESSAGE EVENT === (your existing message checks with slur filter, link filter, etc.)
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
+    # === SLUR FILTERING ===
     slurs = ["spick", "nigger", "retarded"]
     content = message.content.lower()
     if any(slur in content for slur in slurs):
@@ -148,20 +148,13 @@ async def on_message(message):
             pass
         return
 
-    if message.channel.category_id in TICKET_CATEGORY_IDS:
-        await bot.process_commands(message)
-        return
-
-@bot.event
-async def on_message(message):
-    # === LINK FILTERING LOGIC ===
+    # === LINK FILTERING ===
     link_pattern = re.compile(r"https?://[^\s]+")
     links = link_pattern.findall(message.content)
 
     if links:
         has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
         is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
-
         is_department_coordinator = any(role.id == DEPARTMENT_COORDINATOR_ROLE_ID for role in message.author.roles)
         in_department_announcement_channel = message.channel.id == DEPARTMENT_ANNOUNCEMENT_CHANNEL_ID
 
@@ -191,6 +184,12 @@ async def on_message(message):
                 await log_to_channel(bot, f"🚫 Deleted unauthorized link from {message.author} in #{message.channel}: `{link}`")
                 return
 
+    # === TICKET CHANNEL COMMANDS ALLOWED ===
+    if message.channel.category_id in TICKET_CATEGORY_IDS:
+        await bot.process_commands(message)
+        return
+
+    # === DEFAULT COMMAND HANDLER ===
     await bot.process_commands(message)
 
 async def log_mod_action(guild_id: int, user_id: int, moderator_id: int, action_type: str, reason: str):
