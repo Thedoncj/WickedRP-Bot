@@ -562,5 +562,21 @@ async def unban(interaction: discord.Interaction, user_id: str, reason: str):
         await interaction.followup.send(f"❌ Failed to unban user: {e}", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to unban user ID {user_id}: {e}")
 
-# === RUN BOT ===
+# Your commands and setup go here...
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
+
+def keep_alive():
+    t = threading.Thread(target=run)
+    t.start()
+
+# Start keep-alive and bot
+keep_alive()
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
