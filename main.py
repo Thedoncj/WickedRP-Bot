@@ -3,11 +3,12 @@ import re
 import asyncio
 import threading
 from flask import Flask
-from discord.ext import commands
+from discord.ext import commands, tasks
 import discord
 from discord import app_commands
 from datetime import datetime, timedelta
 import aiosqlite
+import random
 
 # === INTENTS & BOT ===
 intents = discord.Intents.default()
@@ -22,13 +23,8 @@ WHITELISTER_ROLE_ID = 1344882926965493823
 WHITELISTED_ROLE_ID = 1127098119750951083
 
 TICKET_CATEGORY_IDS = [
-    1282992099876274187,
-    1163567127157035218,
-    1130779266880131223,
-    1212553215606919188,
-    1212553308321874000,
-    1276565387579887616,
-    1394004814911766770
+    1282992099876274187, 1163567127157035218, 1130779266880131223,
+    1212553215606919188, 1212553308321874000, 1276565387579887616, 1394004814911766770
 ]
 
 MODERATION_ROLES = {
@@ -54,78 +50,13 @@ ALLOWED_STREAMER_DOMAINS = ["twitch.tv", "youtube.com", "kick.com", "tiktok"]
 def has_permission(member: discord.Member, command: str) -> bool: 
     for role in member.roles:
         perms = MODERATION_ROLES.get(role.name)
-        if perms:
-            if "all" in perms or command in perms:
-                return True
+        if perms and ("all" in perms or command in perms):
+            return True
     return False
-
-# === UTILS ===
-async def log_to_channel(bot, content):
-    log_channel = bot.get_channel(LOG_CHANNEL_ID)
-    if log_channel:
-        await log_channel.send(content)
 
 def can_act(invoker: discord.Member, target: discord.Member, command: str):
     return has_permission(invoker, command) and invoker.top_role > target.top_role
 
-# === DATABASE INITIALIZATION ===
-async def initialize_database():
-    async with aiosqlite.connect("database.db") as db:
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS warns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                guild_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                moderator_id TEXT NOT NULL,
-                reason TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS bans (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                guild_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                moderator_id TEXT NOT NULL,
-                reason TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                unbanned BOOLEAN DEFAULT 0,
-                unbanned_by TEXT,
-                unban_reason TEXT,
-                unban_timestamp DATETIME
-            )
-        """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS kicks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                guild_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                moderator_id TEXT NOT NULL,
-                reason TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS mutes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                guild_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                moderator_id TEXT NOT NULL,
-                reason TEXT NOT NULL,
-                duration INTEGER, -- seconds; NULL if permanent
-                start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-                end_time DATETIME
-            )
-        """)
-        await db.commit()
-
-@bot.event
-async def on_ready():
-    await initialize_database()
-    await bot.tree.sync()
-    print(f"Logged in as {bot.user}")
-
-# === MESSAGE EVENT ===
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -181,17 +112,154 @@ async def on_message(message):
                 return
 
     await bot.process_commands(message)
+  
+# === DATABASE INITIALIZATION ===
+async def initialize_database():
+    async with aiosqlite.connect("database.db") as db:
+        await db.execute("""CREATE TABLE IF NOT EXISTS warns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, user_id TEXT,
+            moderator_id TEXT, reason TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)""")
 
-# === FIXED INDENTATION BLOCK ===
-try:
-    some_code_here()
-except Exception as e:
-    print(e)
+        await db.execute("""CREATE TABLE IF NOT EXISTS bans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, user_id TEXT,
+            moderator_id TEXT, reason TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            unbanned BOOLEAN DEFAULT 0, unbanned_by TEXT, unban_reason TEXT, unban_timestamp DATETIME)""")
 
-async def some_function():
-    await asyncio.sleep(1)
+        await db.execute("""CREATE TABLE IF NOT EXISTS kicks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, user_id TEXT,
+            moderator_id TEXT, reason TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)""")
 
-# === COMMANDS ===
+        await db.execute("""CREATE TABLE IF NOT EXISTS mutes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, user_id TEXT,
+            moderator_id TEXT, reason TEXT, duration INTEGER,
+            start_time DATETIME DEFAULT CURRENT_TIMESTAMP, end_time DATETIME)""")
+
+        await db.execute("""CREATE TABLE IF NOT EXISTS giveaways (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id TEXT, message_id TEXT,
+            prize TEXT, end_time DATETIME)""")
+
+        await db.commit()
+
+# === LOGGER WITH RATE LIMIT CATCH ===
+async def log_to_channel(bot, content):
+    try:
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            await log_channel.send(content)
+    except discord.HTTPException as e:
+        if e.status == 429:
+            print("⚠️ Rate limit hit when logging to channel!")
+        else:
+            print(f"❌ Logging error: {e}")
+
+# === BACKGROUND TASK FOR SCHEDULED UNMUTES ===
+@tasks.loop(minutes=1)
+async def check_mute_expirations():
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect("database.db") as db:
+        async with db.execute("SELECT guild_id, user_id, end_time FROM mutes WHERE end_time <= ? AND end_time IS NOT NULL", (now,)) as cursor:
+            async for guild_id, user_id, end_time in cursor:
+                guild = bot.get_guild(int(guild_id))
+                if guild:
+                    member = guild.get_member(int(user_id))
+                    if member:
+                        mute_role = discord.utils.get(guild.roles, name="Muted")
+                        if mute_role and mute_role in member.roles:
+                            try:
+                                await member.remove_roles(mute_role, reason="Scheduled unmute")
+                                await log_to_channel(bot, f"🔊 {member.mention} was automatically unmuted.")
+                            except Exception as e:
+                                print(f"Error auto-unmuting {member}: {e}")
+        await db.execute("DELETE FROM mutes WHERE end_time <= ? AND end_time IS NOT NULL", (now,))
+        await db.commit()
+
+# === BOT READY ===
+@bot.event
+async def on_ready():
+    await initialize_database()
+    await bot.tree.sync()
+    check_mute_expirations.start()
+    print(f"✅ Logged in as {bot.user}")
+
+# === MESSAGE FILTERING (NO CHANGES NEEDED) ===
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    content = message.content.lower()
+    if any(slur in content for slur in ["spick", "nigger", "retarded"]):
+        await message.delete()
+        await log_to_channel(bot, f"🚫 Slur message deleted from {message.author}: `{message.content}`")
+        try:
+            await message.channel.send(f"🚫 {message.author.mention}, message removed for breaking rules.")
+            await message.author.send("⚠️ You were warned for using slurs.")
+        except discord.Forbidden:
+            pass
+        return
+
+    if message.channel.category_id in TICKET_CATEGORY_IDS:
+        await bot.process_commands(message)
+        return
+    
+    links = re.findall(r"https?://[^\s]+", message.content)
+    if links:
+        has_privilege = any(role.name in PRIVILEGED_ROLES for role in message.author.roles)
+        is_streamer = any(role.name == STREAMER_ROLE for role in message.author.roles)
+
+        for link in links:
+            if "discord.gg" in link or "discord.com/invite" in link:
+                await message.delete()
+                await message.channel.send(f"🚫 {message.author.mention}, no Discord invites allowed.")
+                await log_to_channel(bot, f"🚫 Discord invite deleted from {message.author}: `{link}`")
+                return
+            if any(domain in link for domain in ["tenor.com", "giphy.com"]):
+                continue
+            if message.channel.id == STREAMER_CHANNEL_ID and is_streamer and any(domain in link for domain in ALLOWED_STREAMER_DOMAINS):
+                continue
+            if not has_privilege:
+                await message.delete()
+                await message.channel.send(f"🚫 {message.author.mention}, you're not allowed to post links.")
+                await log_to_channel(bot, f"🚫 Unauthorized link from {message.author}: `{link}`")
+                return
+
+    await bot.process_commands(message)
+
+# === GIVEAWAY COMMAND ===
+@bot.tree.command(name="giveaway", description="Start a giveaway")
+@app_commands.describe(duration="Duration in minutes", prize="Prize name")
+async def giveaway(interaction: discord.Interaction, duration: int, prize: str):
+    await interaction.response.defer(thinking=True)
+    try:
+        embed = discord.Embed(title="🎉 Giveaway!", description=f"Prize: **{prize}**\nReact with 🎉 to enter!\nEnds in {duration} minutes.", color=discord.Color.gold())
+        embed.set_footer(text="Giveaway started by " + str(interaction.user))
+        msg = await interaction.channel.send(embed=embed)
+        await msg.add_reaction("🎉")
+
+        end_time = datetime.utcnow() + timedelta(minutes=duration)
+        async with aiosqlite.connect("database.db") as db:
+            await db.execute("INSERT INTO giveaways (channel_id, message_id, prize, end_time) VALUES (?, ?, ?, ?)",
+                             (str(msg.channel.id), str(msg.id), prize, end_time.isoformat()))
+            await db.commit()
+        await interaction.followup.send("✅ Giveaway started!", ephemeral=True)
+
+        await asyncio.sleep(duration * 60)
+        new_msg = await interaction.channel.fetch_message(msg.id)
+        users = await new_msg.reactions[0].users().flatten()
+        users = [u for u in users if not u.bot]
+
+        if not users:
+            await interaction.channel.send("❌ No valid entries.")
+            return
+
+        winner = random.choice(users)
+        await interaction.channel.send(f"🎉 Congrats {winner.mention}, you won **{prize}**!")
+
+    except Exception as e:
+        await interaction.followup.send("❌ Failed to start giveaway.", ephemeral=True)
+        await log_to_channel(bot, f"❌ Giveaway error by {interaction.user}: {e}")
+
+# === YOUR OTHER MODERATION COMMANDS HERE ===
 @bot.tree.command(name="kick", description="Kick a member")
 @app_commands.describe(user="User to kick", reason="Reason for the kick")
 async def kick(interaction: discord.Interaction, user: discord.Member, reason: str):
