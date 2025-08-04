@@ -406,6 +406,7 @@ async def textmute(interaction: discord.Interaction, user: discord.Member, durat
     except Exception as e:
         await interaction.followup.send("❌ Failed to mute user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to mute {user}: {e}")
+
 @bot.tree.command(name="textunmute", description="Unmute a user in text channels")
 @app_commands.describe(user="User to unmute", reason="Reason for unmuting")
 async def textunmute(interaction: discord.Interaction, user: discord.Member, reason: str):
@@ -463,24 +464,36 @@ async def modhistory(interaction: discord.Interaction, user: discord.User):
     try:
         async with aiosqlite.connect("database.db") as db:
             # Fetch warns
-            warns = await db.execute_fetchall("SELECT moderator_id, reason, timestamp FROM warns WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+            warns = await db.execute_fetchall(
+                "SELECT moderator_id, reason, timestamp FROM warns WHERE guild_id = ? AND user_id = ?",
+                (guild_id, str(user.id))
+            )
             # Fetch bans
-            bans = await db.execute_fetchall("SELECT moderator_id, reason, timestamp, unbanned FROM bans WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+            bans = await db.execute_fetchall(
+                "SELECT moderator_id, reason, timestamp, unbanned FROM bans WHERE guild_id = ? AND user_id = ?",
+                (guild_id, str(user.id))
+            )
             # Fetch kicks
-            kicks = await db.execute_fetchall("SELECT moderator_id, reason, timestamp FROM kicks WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
+            kicks = await db.execute_fetchall(
+                "SELECT moderator_id, reason, timestamp FROM kicks WHERE guild_id = ? AND user_id = ?",
+                (guild_id, str(user.id))
+            )
             # Fetch mutes
-            mutes = await db.execute_fetchall("SELECT moderator_id, reason, start_time, end_time FROM mutes WHERE guild_id = ? AND user_id = ?", (guild_id, str(user.id)))
-        
+            mutes = await db.execute_fetchall(
+                "SELECT moderator_id, reason, start_time, end_time FROM mutes WHERE guild_id = ? AND user_id = ?",
+                (guild_id, str(user.id))
+            )
+
         embed = discord.Embed(title=f"Mod History for {user}", color=discord.Color.blue())
 
         if warns:
             warn_lines = []
             for mod_id, reason, ts in warns:
                 try:
-                    mod = interaction.guild.get_member(int(mod_id))
-                    mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
-                except Exception:
-                    mod_name = f"Invalid Mod ID: {mod_id}"
+                    mod_user = await bot.fetch_user(int(mod_id))
+                    mod_name = mod_user.mention
+                except:
+                    mod_name = f"Mod ID: {mod_id}"
                 warn_lines.append(f"⚠️ Warn by {mod_name} at {ts}: {reason}")
             embed.add_field(name="Warns", value="\n".join(warn_lines), inline=False)
         else:
@@ -490,10 +503,10 @@ async def modhistory(interaction: discord.Interaction, user: discord.User):
             ban_lines = []
             for mod_id, reason, ts, unbanned in bans:
                 try:
-                    mod = interaction.guild.get_member(int(mod_id))
-                    mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
-                except Exception:
-                    mod_name = f"Invalid Mod ID: {mod_id}"
+                    mod_user = await bot.fetch_user(int(mod_id))
+                    mod_name = mod_user.mention
+                except:
+                    mod_name = f"Mod ID: {mod_id}"
                 status = "Unbanned" if unbanned else "Banned"
                 ban_lines.append(f"🔨 {status} by {mod_name} at {ts}: {reason}")
             embed.add_field(name="Bans", value="\n".join(ban_lines), inline=False)
@@ -504,10 +517,10 @@ async def modhistory(interaction: discord.Interaction, user: discord.User):
             kick_lines = []
             for mod_id, reason, ts in kicks:
                 try:
-                    mod = interaction.guild.get_member(int(mod_id))
-                    mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
-                except Exception:
-                    mod_name = f"Invalid Mod ID: {mod_id}"
+                    mod_user = await bot.fetch_user(int(mod_id))
+                    mod_name = mod_user.mention
+                except:
+                    mod_name = f"Mod ID: {mod_id}"
                 kick_lines.append(f"👢 Kick by {mod_name} at {ts}: {reason}")
             embed.add_field(name="Kicks", value="\n".join(kick_lines), inline=False)
         else:
@@ -517,10 +530,10 @@ async def modhistory(interaction: discord.Interaction, user: discord.User):
             mute_lines = []
             for mod_id, reason, start, end in mutes:
                 try:
-                    mod = interaction.guild.get_member(int(mod_id))
-                    mod_name = mod.display_name if mod else f"Mod ID: {mod_id}"
-                except Exception:
-                    mod_name = f"Invalid Mod ID: {mod_id}"
+                    mod_user = await bot.fetch_user(int(mod_id))
+                    mod_name = mod_user.mention
+                except:
+                    mod_name = f"Mod ID: {mod_id}"
                 mute_lines.append(f"🔇 Mute by {mod_name} from {start} to {end}: {reason}")
             embed.add_field(name="Mutes", value="\n".join(mute_lines), inline=False)
         else:
@@ -529,7 +542,7 @@ async def modhistory(interaction: discord.Interaction, user: discord.User):
         await interaction.followup.send(embed=embed)
 
     except Exception as e:
-        await interaction.followup.send(f"❌ Error fetching mod history: `{e}`")
+        await interaction.followup.send(f"❌ Error fetching mod history: `{e}`", ephemeral=True)
 
 @bot.tree.command(name="unban", description="Unban a user by their ID")
 @app_commands.describe(user_id="User ID to unban", reason="Reason for unbanning")
