@@ -225,6 +225,44 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+@bot.event
+async def on_error(event, *args, **kwargs):
+    import traceback
+    import sys
+
+    error_channel_id = 1402041369052057731
+    error_channel = bot.get_channel(error_channel_id)
+
+    if error_channel is None:
+        print("❌ Could not find the error log channel.")
+        return
+
+    error_type, error_value, tb = sys.exc_info()
+    traceback_str = ''.join(traceback.format_exception(error_type, error_value, tb))
+
+    error_message = f"🚨 **Unhandled Exception in `{event}`**\n```py\n{traceback_str[:1900]}```"
+
+    try:
+        await error_channel.send(error_message)
+    except Exception as send_error:
+        print("❌ Failed to send error to Discord channel:", send_error)
+        print(traceback_str)
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    import traceback
+
+    error_channel_id = 1402041369052057731
+    error_channel = bot.get_channel(error_channel_id)
+
+    tb = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+    error_msg = f"⚠️ **Error in Command `{interaction.command.name}` by {interaction.user.mention}**\n```py\n{tb[:1900]}```"
+
+    try:
+        await error_channel.send(error_msg)
+    except:
+        print("❌ Could not send command error to log channel.")
+
 # === GIVEAWAY COMMAND ===
 @bot.tree.command(name="giveaway", description="Start a giveaway")
 @app_commands.describe(duration="Duration in minutes", prize="Prize name")
