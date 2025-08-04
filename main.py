@@ -279,14 +279,17 @@ async def kick(interaction: discord.Interaction, user: discord.Member, reason: s
         await interaction.followup.send("❌ Failed to kick user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to kick {user}: {e}")
 
-@bot.tree.command(name="ban", description="Ban a member")
+@bot.tree.command(name="ban", description="Ban a user (even if they're not in the server)")
 @app_commands.describe(user="User to ban", reason="Reason for the ban")
-async def ban(interaction: discord.Interaction, user: discord.Member, reason: str):
+async def ban(interaction: discord.Interaction, user: discord.User, reason: str):
     await interaction.response.defer(thinking=True)
-    if not can_act(interaction.user, user, "ban"):
+    # Permission check only applies if user is in guild
+    member = interaction.guild.get_member(user.id)
+    if member and not can_act(interaction.user, member, "ban"):
         return await interaction.followup.send("❌ You lack permission or your role is not high enough.", ephemeral=True)
+
     try:
-        await user.ban(reason=reason)
+        await interaction.guild.ban(user, reason=reason)
         await interaction.followup.send(f"🔨 {user.mention} was banned. Reason: {reason}")
         await log_to_channel(bot, f"🔨 {interaction.user} banned {user} | Reason: {reason}")
 
@@ -298,28 +301,30 @@ async def ban(interaction: discord.Interaction, user: discord.Member, reason: st
         await interaction.followup.send("❌ Failed to ban user.", ephemeral=True)
         await log_to_channel(bot, f"❌ {interaction.user} failed to ban {user}: {e}")
 
+
 @bot.tree.command(name="gban", description="Globally ban a user from all servers")
 @app_commands.describe(user="User to globally ban", reason="Reason for global ban")
 async def gban(interaction: discord.Interaction, user: discord.User, reason: str):
     await interaction.response.defer(thinking=True)
     if not has_permission(interaction.user, "gban"):
         return await interaction.followup.send("❌ You lack permission.", ephemeral=True)
+
     failed = []
     for guild in bot.guilds:
         member = guild.get_member(user.id)
-        if member:
-            if not can_act(interaction.user, member, "gban"):
-                failed.append(guild.name)
-                continue
-            try:
-                await guild.ban(member, reason=f"Global Ban: {reason}")
-                # Add to DB per guild
-                async with aiosqlite.connect("database.db") as db:
-                    await db.execute("INSERT INTO bans (guild_id, user_id, moderator_id, reason, unbanned) VALUES (?, ?, ?, ?, 0)",
-                                     (str(guild.id), str(user.id), str(interaction.user.id), f"Global Ban: {reason}"))
-                    await db.commit()
-            except:
-                failed.append(guild.name)
+        # Check role hierarchy if they're in the server
+        if member and not can_act(interaction.user, member, "gban"):
+            failed.append(guild.name)
+            continue
+        try:
+            await guild.ban(user, reason=f"Global Ban: {reason}")
+            async with aiosqlite.connect("database.db") as db:
+                await db.execute("INSERT INTO bans (guild_id, user_id, moderator_id, reason, unbanned) VALUES (?, ?, ?, ?, 0)",
+                                 (str(guild.id), str(user.id), str(interaction.user.id), f"Global Ban: {reason}"))
+                await db.commit()
+        except:
+            failed.append(guild.name)
+
     await interaction.followup.send(f"🌐 {user.mention} globally banned. Failed in: {', '.join(failed) if failed else 'None'}")
     await log_to_channel(bot, f"🌐 {interaction.user} globally banned {user} | Reason: {reason} | Failed in: {failed}")
 
