@@ -344,27 +344,41 @@ async def ban(interaction: discord.Interaction, user: discord.User, reason: str)
 @app_commands.describe(user="User to globally ban", reason="Reason for global ban")
 async def gban(interaction: discord.Interaction, user: discord.User, reason: str):
     await interaction.response.defer(thinking=True)
+
     if not has_permission(interaction.user, "gban"):
-        return await interaction.followup.send("❌ You lack permission.", ephemeral=True)
+        return await interaction.followup.send(" You lack permission.", ephemeral=True)
 
     failed = []
+
     for guild in bot.guilds:
         member = guild.get_member(user.id)
-        # Check role hierarchy if they're in the server
+
+        # Check if user is in the guild and if we can act on them
         if member and not can_act(interaction.user, member, "gban"):
-            failed.append(guild.name)
+            failed.append(f"{guild.name} (cannot act on user)")
             continue
+
+        # Check if bot has ban permissions
+        if not guild.me.guild_permissions.ban_members:
+            failed.append(f"{guild.name} (missing ban permissions)")
+            continue
+
         try:
             await guild.ban(user, reason=f"Global Ban: {reason}")
             async with aiosqlite.connect("database.db") as db:
-                await db.execute("INSERT INTO bans (guild_id, user_id, moderator_id, reason, unbanned) VALUES (?, ?, ?, ?, 0)",
-                                 (str(guild.id), str(user.id), str(interaction.user.id), f"Global Ban: {reason}"))
+                await db.execute(
+                    "INSERT INTO bans (guild_id, user_id, moderator_id, reason, unbanned) VALUES (?, ?, ?, ?, 0)",
+                    (str(guild.id), str(user.id), str(interaction.user.id), f"Global Ban: {reason}")
+                )
                 await db.commit()
-        except:
-            failed.append(guild.name)
+        except Exception as e:
+            failed.append(f"{guild.name} (error: {type(e).name})")
 
-    await interaction.followup.send(f"🌐 {user.mention} globally banned. Failed in: {', '.join(failed) if failed else 'None'}")
-    await log_to_channel(bot, f"🌐 {interaction.user} globally banned {user} | Reason: {reason} | Failed in: {failed}")
+    # Format failure message
+    fail_msg = f"Failed in: {', '.join(failed)}" if failed else " Banned in all servers"
+
+    await interaction.followup.send(f" {user.mention} globally banned. {fail_msg}")
+    await log_to_channel(bot, f" {interaction.user} globally banned {user} | Reason: {reason} | {fail_msg}")
 
 @bot.tree.command(name="warn", description="Warn a member")
 @app_commands.describe(user="User to warn", reason="Reason for warning")
