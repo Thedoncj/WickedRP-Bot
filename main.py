@@ -141,16 +141,31 @@ async def initialize_database():
         await db.commit()
 
 # === LOGGER WITH RATE LIMIT CATCH ===
-async def log_to_channel(bot, content):
+from datetime import datetime
+import discord
+
+async def log_to_channel(bot, user: discord.User, action: str, reason: str, moderator: discord.User = None):
     try:
-        log_channel = bot.get_channel(LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(content)
+        log_channel = bot.get_channel(1384882351678689431)  # Your LOG_CHANNEL_ID
+        if not log_channel:
+            return
+
+        embed = discord.Embed(color=discord.Color.red())
+        embed.set_author(name=user.name, icon_url=user.display_avatar.url)
+        embed.description = f"✈️ {user.mention} **{action}**"
+        embed.add_field(name="**Responsible Moderator:**", value=moderator.mention if moderator else bot.user.mention, inline=True)
+        embed.add_field(name="**Reason:**", value=reason, inline=True)
+        embed.set_footer(text=f"{bot.user.name} • {datetime.now().strftime('%I:%M %p')}")
+
+        await log_channel.send(embed=embed)
+
     except discord.HTTPException as e:
         if e.status == 429:
             print("⚠️ Rate limit hit when logging to channel!")
         else:
             print(f"❌ Logging error: {e}")
+    except Exception as e:
+        print(f"❌ Unexpected log error: {e}")
 
 # === BACKGROUND TASK FOR SCHEDULED UNMUTES ===
 @tasks.loop(minutes=1)
