@@ -517,10 +517,10 @@ async def wl(interaction: discord.Interaction, user: discord.Member):
     try:
         await user.add_roles(whitelisted_role, reason=f"Whitelisted by {author}")
         await interaction.followup.send(f"✅ {user.mention} has been whitelisted.")
-        await log_to_channel(bot, f"✅ {author} whitelisted {user}")
+        await log_to_channel(bot, "Whitelist", f"✅ {author} whitelisted {user}")
     except Exception as e:
         await interaction.followup.send("❌ Failed to whitelist user.", ephemeral=True)
-        await log_to_channel(bot, f"❌ {author} failed to whitelist {user}: {e}")
+        await log_to_channel(bot, "Whitelist Error", f"❌ {author} failed to whitelist {user}: {e}")
 
 @bot.tree.command(name="modhistory", description="Show moderation history for a user")
 @app_commands.describe(user="User to show history for")
